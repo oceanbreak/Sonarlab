@@ -91,7 +91,10 @@ class VideoPlayer:
 
 
     def setFrameStep(self, value):
-        if value > 0.5:
+        """
+        Value is number of Frames in step
+        """
+        if value >= 1:
             self.frame_step = int(value)
 
 
@@ -226,18 +229,15 @@ if __name__ == "__main__":
     # video_path =  'D:\DATA\Videomodule video samples/R_20200915_142747_20200915_143147.avi'
     video_path = 'D:/VIDEOPLATFORM_REC/2021.06.28 Ст 7024/R_20210628_005251_20210628_005649.avi'
 
-    def printH(x, y):
-        print('Hello %i' % (x+y))
     
     player = VideoPlayer()
-    player.addFunction('s', printH, 8,3)
     player.openVideoFile(video_path)
     player.getNextFrame()
     player.setScaleFactor(3)
     while (player.playing):
-        # player.show()
-        fr = player.getScaledCurFrame()
-        cv2.imshow('Frame', fr)
+        player.show()
+        # fr = player.getScaledCurFrame()
+        # cv2.imshow('Frame', fr)
         # player.playStepForwards()
         # player.waitKey(10)
         player.waitKeyHandle()
