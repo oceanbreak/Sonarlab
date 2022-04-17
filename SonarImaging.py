@@ -4,6 +4,92 @@ from matplotlib import pyplot as plt
 from functools import partial
 
 
+### FUNCTIONS ###
+
+def eqHist(image, clache=True, gray_only=False):
+    """
+    Equalization of image, by default based on CLACHE method
+    """
+    if gray_only:
+        L = image
+    else:
+        imgHLS = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
+        L = imgHLS[:,:,1]
+    if clache:
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        equ = clahe.apply(L)
+    else:
+        equ = cv2.equalizeHist(L)
+
+    if gray_only:
+        return equ
+
+    imgHLS[:,:,1] = equ
+    res = cv2.cvtColor(imgHLS, cv2.COLOR_HLS2BGR)
+    return res
+
+
+def equalSize(img_photo, img_video):
+    """
+    Function crops video to match photo ratio.
+    Then it scales photo to video size.
+    :param img_photo - RGB photo image
+    :param img_video - RGB videi omage
+    :return: 2 images of equal size, scale and crop factor
+    """
+    height_ph, width_ph = img_photo.shape[:2]
+    height_v, width_v = img_video.shape[:2]
+
+    v_rate = width_v / height_v
+    ph_rate = width_ph / height_ph
+
+    # Crops video according to it's difference in ratio with photo
+    delta_x = delta_y = 0
+    if ph_rate > v_rate:
+        delta_y = int(0.5 * (height_v - width_v / ph_rate))
+        if delta_y == 0:
+            new_video = img_video
+        else:
+            new_video = img_video[delta_y : -delta_y, :, :]
+    elif ph_rate < v_rate:
+        delta_x = int(0.5 * (width_v - height_v * ph_rate))
+        if delta_x == 0:
+            new_video = img_video
+        else:
+            new_video = img_video[:, delta_x : -delta_x, :]
+    else:
+        new_video = img_video
+
+    scale_factor = img_photo.shape[0] / new_video.shape[0]
+    new_photo = cv2.resize(img_photo, (new_video.shape[1], new_video.shape[0]))
+
+    return (new_photo, new_video, scale_factor)
+
+
+def drawPoints(image, *points, radius=5, color=(0,0,255), thickness=2):
+    for pt in points:
+        cv2.circle(image, pt, radius, color, thickness)
+
+
+def calcDistance(pt1, pt2):
+    y1, x1 = pt1
+    y2, x2 = pt2
+    return math.sqrt((y1 - y2)**2 + (x1 - x2)**2)
+
+
+def undistortImage(img, mtx, dist):
+    h, w = img.shape[:2]
+    newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
+    return cv2.undistort(img, mtx, dist, None, newcameramtx)
+
+
+def sliceImage(image, ptA, ptB):
+    rr, cc = line(*ptA, *ptB)
+    values = image[rr, cc]
+    return (values, rr, cc)
+
+
+### CLASSES ###
 class VideoPlayer:
     """
     This class opens video file and playback it.
