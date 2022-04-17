@@ -66,8 +66,12 @@ def equalSize(img_photo, img_video):
     return (new_photo, new_video, scale_factor)
 
 
-def drawPoints(image, *points, radius=5, color=(0,0,255), thickness=2):
+def drawPoints(image, *points, radius=5, color=(0,0,255), thickness=2, scaler=1):
+    """
+    Draw points on image preserving scale
+    """
     for pt in points:
+        pt = tuple([int(x*scaler) for x in pt])
         cv2.circle(image, pt, radius, color, thickness)
 
 
