@@ -30,6 +30,7 @@ class VideoPlayer:
 
         #### VARIABLES ####
         self.video = None
+        self.video_name = None
         self.frame_step = 1
         self.vid_frame_length = 0
         self.cur_frame_no = 0
@@ -75,6 +76,7 @@ class VideoPlayer:
             self.vid_frame_length = self.video.get(7)
             self.fps = self.video.get(5)
             self.is_loaded = True
+            self.video_name = video_file
             self.playing = False # Flag that says that video is not playing yet
             print(f'INFO: {video_file} loaded successfully')
 
