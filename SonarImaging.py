@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 from functools import partial
+import math
 
 
 ### FUNCTIONS ###
@@ -81,14 +82,18 @@ def calcDistance(pt1, pt2):
     return math.sqrt((y1 - y2)**2 + (x1 - x2)**2)
 
 
-def undistortImage(img, mtx, dist):
+def undistortImage(img, mtx, dist, crop=False):
     h, w = img.shape[:2]
     newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
-    return cv2.undistort(img, mtx, dist, None, newcameramtx)
+    ret = cv2.undistort(img, mtx, dist, None, newcameramtx)
+    if crop:
+        x, y, w, h = roi
+        ret = ret[y:y+h, x:x+w]
+    return ret
 
 
 def sliceImage(image, ptA, ptB):
-    rr, cc = line(*ptA, *ptB)
+    rr, cc = cv2.line(*ptA, *ptB)
     values = image[rr, cc]
     return (values, rr, cc)
 
@@ -330,10 +335,6 @@ if __name__ == "__main__":
     player.setScaleFactor(3)
     while (player.playing):
         player.show()
-        # fr = player.getScaledCurFrame()
-        # cv2.imshow('Frame', fr)
-        # player.playStepForwards()
-        # player.waitKey(10)
         player.waitKeyHandle()
     player.releaseVideo()
 
