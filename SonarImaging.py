@@ -251,6 +251,10 @@ class VideoPlayer:
             self.cur_frame_no += self.frame_step
             self.video.set(1, self.cur_frame_no)
             self.getNextFrame()
+        else:
+            self.video.set(1, self.vid_frame_length-1)
+            self.playing=False
+            print('Video End')
 
 
     def playStepBackwards(self):
@@ -326,7 +330,7 @@ class VideoPlayer:
 if __name__ == "__main__":
 
     # video_path =  'D:\DATA\Videomodule video samples/R_20200915_142747_20200915_143147.avi'
-    video_path = 'D:/VIDEOPLATFORM_REC/2021.06.28 Ст 7024/R_20210628_005251_20210628_005649.avi'
+    video_path = 'D:/test1.mp4'
 
     
     player = VideoPlayer()
