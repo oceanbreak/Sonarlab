@@ -87,8 +87,9 @@ def undistortImage(img, mtx, dist, crop=False):
     newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
     ret = cv2.undistort(img, mtx, dist, None, newcameramtx)
     if crop:
-        x, y, w, h = roi
-        ret = ret[y:y+h, x:x+w]
+        x, y, w1, h1 = roi
+        ret = ret[y:y+h1, x:x+w1]
+        ret = cv2.resize(ret, (w,h))
     return ret
 
 
