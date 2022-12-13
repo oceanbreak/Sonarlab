@@ -1,3 +1,5 @@
 __pycache__/SonarImaging.cpython-37.pyc
 __pycache__/*
 __pycache__/
+BW_dst.npy
+BW_mtx.npy
