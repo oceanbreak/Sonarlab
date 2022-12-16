@@ -233,7 +233,7 @@ class VideoPlayer:
             self.playing = False # Flag that says that video is not playing yet
             print(f'INFO: {video_file} loaded successfully')
 
-        except Exception:
+        except TypeError:
             print('ERROR: %s is not a video' % video_file)
             self.video = None
         if self.vid_frame_length == 0.0:
@@ -335,6 +335,7 @@ class VideoPlayer:
         c_key = cv2.waitKey(millisec)
         if c_key & 0xFF == 27:
             self.playing = False
+        return c_key
 
 
     def frameStepChange(self, sec):
@@ -366,11 +367,12 @@ class VideoPlayer:
         c_key = cv2.waitKey()
         if c_key & 0xFF == 27:
             self.playing = False
-            return None
+            # return None
         idx = chr(c_key)
         if idx in self.func_set.keys():
             ret = self.func_set[idx]()
-            return ret
+            # return ret
+        return c_key
 
 
     def releaseVideo(self):
@@ -387,8 +389,11 @@ class VideoPlayer:
 
 if __name__ == "__main__":
 
-    # video_path =  'D:\DATA\Videomodule video samples/R_20200915_142747_20200915_143147.avi'
-    video_path = 'D:/test1.mp4'
+    video_path =  'D:\DATA\Videomodule video samples/R_20221002_001808_20221002_002206.avi'
+    # video_path = 'D:/test1.mp4'
+
+    import glob
+    # video_path = glob.glob('*.avi')
 
     
     player = VideoPlayer()
