@@ -1,5 +1,3 @@
-__pycache__/SonarImaging.cpython-37.pyc
-__pycache__/*
 __pycache__/
 1
-*.npy
+mtx.npy
