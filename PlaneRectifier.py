@@ -15,10 +15,13 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 from skimage import io, filters, transform
+import Utils as ut
+import pandas as pd 
+import open3d as o3d
 
 # Util functions
 
-def compute_essential_matrix(matches, status, kpsA, kpsB, intrinsic, method=cv2.FM_RANSAC):
+def compute_essential_matrix(matches, status, kpsA, kpsB, intrinsic, method=cv2.FM_RANSAC, threshold=1.0, prob=0.99):
     """Use the set of good mathces to estimate the Essential Matrix.
 
     See  https://en.wikipedia.org/wiki/Eight-point_algorithm#The_normalized_eight-point_algorithm
@@ -40,6 +43,8 @@ def compute_essential_matrix(matches, status, kpsA, kpsB, intrinsic, method=cv2.
             np.float32(pts2),
             intrinsic,
             method=method,
+            threshold = threshold,
+            prob = prob
 #             threshold = 3
         )
     return essential_matrix, inliers, pts1, pts2
@@ -158,11 +163,23 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
     # Computer essential matrix and recover R and T
     Ess, inliers, ptsA, ptsB = compute_essential_matrix(matches, status, kps1, kps2, mtx)
     _, R2, translate,  _ = cv2.recoverPose(Ess, np.float32(ptsA), np.float32(ptsB), mtx)
-    print(f'Essential matrix figured with {len(ptsA)} inliers')
+    print(f'Essential matrix figured with {len(inliers)} inliers')
 
+    print(f'{len(ptsA)} points before filtering outliers')
+
+
+    # filter outliers
+    ptsA = [ptsA[i] for i in range(len(ptsA)) if inliers[i]]
+    ptsB = [ptsB[i] for i in range(len(ptsB)) if inliers[i]]
+
+
+    print(f'{len(ptsA)} points after filtering outliers')
+
+    
     # filter points
     ptsA = [ptsA[i] for i in range(0, len(ptsA), filter_step)]
     ptsB = [ptsB[i] for i in range(0, len(ptsB), filter_step)]
+
 
     # Build projection matricies and triangulate points
     ptsA = np.float32(ptsA)
@@ -179,10 +196,44 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
     points3d = cv2.triangulatePoints(proj_mtx01, proj_mtx02,
                                     ptsA.transpose(),
                                     ptsB.transpose())
+
+                                    
+
+    # RANSAC them!
+    calib_points = cv2.convertPointsFromHomogeneous(points3d.transpose())
+
+    calib_points = calib_points.reshape((calib_points.shape[0], 3))
+
+    # Save point cloud
+    pd.DataFrame(calib_points).to_csv("point_cloud.csv", index=False, header=False)
+
+    # Visualize point cloud
+    # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(calib_points)
+    o3d.visualization.draw_geometries([pcd])
+
+    # calib_points = (points3d / points3d[-1, :]).transpose()
+
+    # msk1 = ut.goRansac(calib_points[:, 0].reshape(-1, 1), 
+    #             calib_points[:, 2].reshape(-1, 1), 
+    #             thresh = 2,
+    #             show_plot=True)
+    # msk2 = ut.goRansac(calib_points[:, 0].reshape(-1, 1), 
+    #             calib_points[:, 1].reshape(-1, 1), 
+    #             thresh = 2,
+    #             show_plot=True)
+    
+    # mask = msk1 * msk2
+
+    # calib_points = np.float32([calib_points[i, :] for i in range(calib_points.shape[0]) if mask[i]])
+
+
     print('Triangulation for 3d points figured')
 
     # Estimating plane for 3d points
     calib_points = (points3d / points3d[-1, :]).transpose()
+
     u, dd, v = np.linalg.svd(calib_points)
     v = v.transpose()
     a, b, c, d = v[:, -1]
@@ -197,6 +248,12 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
         dist = (a*x + b*y + c*z + d) / sqr
         distances.append(dist)
     print('Distances calculated')
+
+    # ut.goRansac(np.arange(len(distances)).reshape(-1, 1), 
+    #                         np.float32(distances).reshape(-1, 1),
+    #                         thresh = 0.4,
+    #                         show_plot=True)
+
         
     # plt.scatter(np.arange(len(distances)), distances)
     # plt.show()
@@ -206,7 +263,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
     rotation_mtx = rotMatrixFromNormal(a,b,c)
     frame = undistortImage(img1, mtx_in, dst_in, True)
     output = rotateImagePlane(frame, mtx_in, rotation_mtx)
-    print('Rotated image figured')
+    print('Rotated image figured\n\n')
     
 
     return output, np.float32([a/d, b/d, c/d]), distances
@@ -241,8 +298,10 @@ if __name__ == "__main__":
         new_shape = (w//4, h//4)
         key = v.waitKeyHandle()
         if key == ord('F'):
+
+            c_key = 0
             
-            for i in range(50):    
+            while c_key != ord('F'):   
 
                 v.getNextFrame()
                 frame2 = v.getCurrentFrame()
@@ -261,7 +320,8 @@ if __name__ == "__main__":
                 temp = cv2.imread('temp.png')
                 # cv2.imshow('Distances scatter', temp)
 
-                cv2.waitKey(2000)
+                c_key = cv2.waitKey()
+
         plt.close()
 
 
