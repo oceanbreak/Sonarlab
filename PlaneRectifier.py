@@ -21,7 +21,7 @@ import open3d as o3d
 
 # Util functions
 
-def compute_essential_matrix(matches, status, kpsA, kpsB, intrinsic, method=cv2.FM_RANSAC, threshold=1.0, prob=0.99):
+def compute_essential_matrix(matches, status, kpsA, kpsB, intrinsic, method=cv2.FM_RANSAC, threshold=0.2, prob=0.6):
     """Use the set of good mathces to estimate the Essential Matrix.
 
     See  https://en.wikipedia.org/wiki/Eight-point_algorithm#The_normalized_eight-point_algorithm
@@ -116,15 +116,13 @@ def rotateImagePlane(img, K, R):
     matrix = K @ R1 @ K_inv1
     
     # Rotate image
-    # tform = transform.ProjectiveTransform(matrix=matrix)
-    # tf_img = transform.warp(img, tform)
     tf_img = cv2.warpPerspective(img, np.linalg.inv(matrix), (img.shape[1], img.shape[0]))
     
     # return tf_img
     return cv2.normalize(tf_img, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)    
 
 
-def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, ransac_thresh=5, filter_step=10):
+def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, ransac_thresh=5, filter_step=10, show_point_cloud=False):
     """
     frame1 and frame2 are colored images of same size
     mtx and dst - are intrinsic matrix and distortion coefficients
@@ -161,11 +159,15 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
         return None
 
     # Computer essential matrix and recover R and T
-    Ess, inliers, ptsA, ptsB = compute_essential_matrix(matches, status, kps1, kps2, mtx)
-    _, R2, translate,  _ = cv2.recoverPose(Ess, np.float32(ptsA), np.float32(ptsB), mtx)
-    print(f'Essential matrix figured with {len(inliers)} inliers')
+    try:
+        Ess, inliers, ptsA, ptsB = compute_essential_matrix(matches, status, kps1, kps2, mtx)
+        _, R2, translate,  _ = cv2.recoverPose(Ess, np.float32(ptsA), np.float32(ptsB), mtx)
+        print(f'Essential matrix figured with {len(inliers)} inliers')
 
-    print(f'{len(ptsA)} points before filtering outliers')
+        print(f'{len(ptsA)} points before filtering outliers')
+    except:
+        print('Failed to calculate essntial matrix')
+        return frame1, np.float32([0, 0, 0]), []
 
 
     # filter outliers
@@ -199,19 +201,13 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
 
                                     
 
-    # RANSAC them!
-    calib_points = cv2.convertPointsFromHomogeneous(points3d.transpose())
 
-    calib_points = calib_points.reshape((calib_points.shape[0], 3))
-
-    # Save point cloud
-    pd.DataFrame(calib_points).to_csv("point_cloud.csv", index=False, header=False)
 
     # Visualize point cloud
-    # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(calib_points)
-    o3d.visualization.draw_geometries([pcd])
+    if show_point_cloud:
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(calib_points)
+        o3d.visualization.draw_geometries([pcd])
 
     # calib_points = (points3d / points3d[-1, :]).transpose()
 
@@ -283,7 +279,7 @@ if __name__ == "__main__":
     print(npy_files)
     dst, mtx = [np.load(y) for y in npy_files]
 
-    video_file =  'D:\DATA\Videomodule video samples/test1.mp4'
+    video_file =  'D:\DATA\Videomodule video samples/R_20220930_145004_20220930_145401.avi'
     print(video_file)
     v = VideoPlayer()
     v.openVideoFile(video_file)
@@ -300,15 +296,25 @@ if __name__ == "__main__":
         if key == ord('F'):
 
             c_key = 0
+            normals = []
+            iteration = 1
             
-            while c_key != ord('F'):   
+            while iteration < 40:   
+
+                print(f"------ITERATION # {iteration}--------")
+                iteration += 1
 
                 v.getNextFrame()
                 frame2 = v.getCurrentFrame()
                 sh_f2 = cv2.resize(frame2, new_shape)
                 cv2.imshow('frame2', sh_f2)
 
-                rectified, coeffs, distances = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.2, filter_step=1)
+                rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.2, filter_step=1)
+                if rec_ret is None:
+                     break
+
+                rectified, coeffs, distances = rec_ret
+                normals.append(coeffs)
                 rec_show = cv2.resize(rectified, new_shape)
                 cv2.imshow('Recified frame', rec_show)
                 plt.clf()
@@ -320,9 +326,22 @@ if __name__ == "__main__":
                 temp = cv2.imread('temp.png')
                 # cv2.imshow('Distances scatter', temp)
 
-                c_key = cv2.waitKey()
+                c_key = cv2.waitKey(100)
 
-        plt.close()
+            plt.close()
+
+            angles = [np.arccos(coef[-1]) / np.linalg.norm(coef) for coef in normals]
+            normals = np.float32(normals)
+            print(normals.shape)
+            axises = ['x', 'y', 'z']
+            fig, ax = plt.subplots()
+            for i in range(3):
+                ax.plot(np.arange(normals.shape[0]), normals[:,i], label=axises[i])
+
+            ax.legend()
+            ax.set_title('Angles between calculated normals and optical axis')
+            plt.show(block=False)
+
 
 
 
