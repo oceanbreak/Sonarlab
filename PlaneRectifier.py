@@ -287,18 +287,24 @@ if __name__ == "__main__":
     print(npy_files)
     dst, mtx = [np.load(y) for y in npy_files]
 
-    video_file =  'D:\DATA\Videomodule video samples/R_20221002_001808_20221002_002206.avi'
+    PATH = 'D:\DATA\Videomodule video samples/'
+    FILE = 'R_20210628_005649_20210628_010047.avi'
+
+    video_file =  PATH + FILE
     print(video_file)
     v = VideoPlayer()
     v.openVideoFile(video_file)
     v.setScaleFactor(4)
+
     v.getNextFrame()
-    v.setFrameStep(1)
+
+    # Set how many frames to skip
+    v.setFrameStep(5)
 
     frame_count = 0
     while v.playing:
-        v.playStepForwards()
-        v.show()
+
+        print(f'Frame {v.cur_frame_no} of {v.vid_frame_length}')
         frame1 = v.getCurrentFrame()
         h, w, _ = frame1.shape
         new_shape = (w//4, h//4)
@@ -309,6 +315,7 @@ if __name__ == "__main__":
             c_key = 0
             normals = []
             iteration = 0
+            rec_step=18
             
             while iteration < 1:   
 
@@ -316,14 +323,15 @@ if __name__ == "__main__":
                 iteration += 1
 
                 try:
-                    v.video.set(1, v.cur_frame_no + 10)
+                    v.video.set(1, v.cur_frame_no + rec_step)
                 except:
-                    v.video.set(1, v.cur_frame_no - 10)
+                    v.video.set(1, v.cur_frame_no - rec_step)
                 # v.getNextFrame()
                 # frame2 = v.getCurrentFrame()
                 ret, frame2 = v.video.read()
-                sh_f2 = cv2.resize(frame2, new_shape)
-                cv2.imshow('frame2', sh_f2)
+
+                # sh_f2 = cv2.resize(frame2, new_shape)
+                # # cv2.imshow('frame2', sh_f2)
 
                 rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.2, filter_step=1)
                 if rec_ret is None:
@@ -331,27 +339,29 @@ if __name__ == "__main__":
 
                 rectified, coeffs, distances = rec_ret
                 normals.append(coeffs)
+
                 rec_show = cv2.resize(rectified, new_shape)
                 cv2.imshow('Recified frame', rec_show)
+
                 # plt.clf()
                 # plt.scatter(np.arange(len(distances)), distances)
                 # plt.show(block=False)
                 # plt.draw()
 
                 # Save normals to file
-                with open('normals.csv', 'a') as f:
-                    f.write(";".join([str(a) for a in coeffs]) + '\n')
+                with open(f'normals_{FILE[:-4]}.csv', 'a') as f:
+                    f.write(";".join([str(v.cur_frame_no)] + [str(a) for a in coeffs]) + '\n')
 
                 # plt.savefig('temp.png')
                 # plt.clf()
                 # temp = cv2.imread('temp.png')
                 # cv2.imshow('Distances scatter', temp)
 
-                c_key = cv2.waitKey(1000)
+                c_key = cv2.waitKey(1)
 
             normals = np.float32(normals)
             new_normal = [0.0, 0.0, 0.0]
-            print(normals.shape)
+
             axises = ['X', 'Y', 'Z']
             # fig1, ax1 = plt.subplots()
             # plt.show(block=False)
@@ -372,40 +382,10 @@ if __name__ == "__main__":
             rotation_mtx = rotMatrixFromNormal(*new_normal)
             frame = undistortImage(frame1, mtx, dst, True)
             output = rotateImagePlane(frame, mtx, rotation_mtx)
+
             # cv2.imshow('Recified frame', output)
-            cv2.imwrite(f'2/frame{frame_count:0>3}.jpg', output)
+            # cv2.imwrite(f'2/frame{frame_count:0>3}.jpg', output)
             frame_count += 1
             # plt.close()
-
-
-
-
-    # dst, mtx = [np.load(f) for f in glob.glob("*.npy")]
-
-    # # Set image scale
-    # scale = 0.2
-
-    # img = cv2.imread(images[0])
-    # # cv2.imshow( 'Raw' ,img)
-    # h, w, _ = img.shape
-    # new_shape = (int(w  * scale), int(h * scale))
-    # mtx_scaled = mtx * scale
-    # mtx_scaled[-1,-1] = 1.0
-    # print(mtx)
-    # print('Scaledmatrix:', mtx_scaled)
-    # img = cv2.resize(img, new_shape)
-
-    # for i in range(90):
-    #     # a = (i -10)/100
-    #     # b = (10 - i)/100
-    #     # c = 1
-    #     # rot_m = rotMatrixFromNormal(a, b, c)
-    #     # Calc rotation matrix
-    #     alpha = (45-i)
-    #     beta = (i-45)
-    #     R = Rot.from_euler('xyz', [alpha, beta, 0], degrees=True)
-    #     rot_m = R.as_matrix()
-    #     # rot_m = rotMatrixFromNormal(1,0,1)
-    #     img_v = rotateImagePlane(img, mtx_scaled, rot_m)
-    #     cv2.imshow('Rotation', img_v)
-    #     cv2.waitKey(10)
+            v.playStepForwards()
+            # v.show()
