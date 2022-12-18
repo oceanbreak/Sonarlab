@@ -287,7 +287,7 @@ if __name__ == "__main__":
     print(npy_files)
     dst, mtx = [np.load(y) for y in npy_files]
 
-    video_file =  'D:\DATA\Videomodule video samples/test1.mp4'
+    video_file =  'D:\DATA\Videomodule video samples/R_20221002_001808_20221002_002206.avi'
     print(video_file)
     v = VideoPlayer()
     v.openVideoFile(video_file)
@@ -297,24 +297,31 @@ if __name__ == "__main__":
 
     frame_count = 0
     while v.playing:
+        v.playStepForwards()
         v.show()
         frame1 = v.getCurrentFrame()
         h, w, _ = frame1.shape
         new_shape = (w//4, h//4)
-        key = v.waitKeyHandle()
-        if key == ord('F'):
+        # key = v.waitKeyHandle()
+        # if key == ord('F'):
+        if v.playing:
 
             c_key = 0
             normals = []
-            iteration = 1
+            iteration = 0
             
-            while iteration < 20:   
+            while iteration < 1:   
 
                 print(f"------ITERATION # {iteration}--------")
                 iteration += 1
 
-                v.getNextFrame()
-                frame2 = v.getCurrentFrame()
+                try:
+                    v.video.set(1, v.cur_frame_no + 10)
+                except:
+                    v.video.set(1, v.cur_frame_no - 10)
+                # v.getNextFrame()
+                # frame2 = v.getCurrentFrame()
+                ret, frame2 = v.video.read()
                 sh_f2 = cv2.resize(frame2, new_shape)
                 cv2.imshow('frame2', sh_f2)
 
@@ -326,43 +333,49 @@ if __name__ == "__main__":
                 normals.append(coeffs)
                 rec_show = cv2.resize(rectified, new_shape)
                 cv2.imshow('Recified frame', rec_show)
-                plt.clf()
-                plt.scatter(np.arange(len(distances)), distances)
-                plt.show(block=False)
-                plt.draw()
+                # plt.clf()
+                # plt.scatter(np.arange(len(distances)), distances)
+                # plt.show(block=False)
+                # plt.draw()
+
+                # Save normals to file
+                with open('normals.csv', 'a') as f:
+                    f.write(";".join([str(a) for a in coeffs]) + '\n')
+
                 # plt.savefig('temp.png')
                 # plt.clf()
-                temp = cv2.imread('temp.png')
+                # temp = cv2.imread('temp.png')
                 # cv2.imshow('Distances scatter', temp)
 
-                c_key = cv2.waitKey(100)
+                c_key = cv2.waitKey(1000)
 
             normals = np.float32(normals)
             new_normal = [0.0, 0.0, 0.0]
             print(normals.shape)
             axises = ['X', 'Y', 'Z']
-            fig1, ax1 = plt.subplots()
-            plt.show(block=False)
-            for i in range(3):
-                X = np.arange(normals.shape[0])
-                Y = normals[:,i]
-                ax1.scatter(X,Y, label=f"{axises[i]} component")
-                mask, ransac_line = ut.goRansac(X.reshape(-1, 1), Y.reshape(-1,1), thresh = 0.1, show_plot=False)
-                ax1.plot(X, ransac_line, label=f'RANSAC fitted {axises[i]}')
-                # Fix normal component
-                new_normal[i] = np.mean(ransac_line)
+            # fig1, ax1 = plt.subplots()
+            # plt.show(block=False)
+            # for i in range(3):
+            #     X = np.arange(normals.shape[0])
+            #     Y = normals[:,i]
+            #     ax1.scatter(X,Y, label=f"{axises[i]} component")
+            #     mask, ransac_line = ut.goRansac(X.reshape(-1, 1), Y.reshape(-1,1), thresh = 0.1, show_plot=False)
+            #     ax1.plot(X, ransac_line, label=f'RANSAC fitted {axises[i]}')
+            #     # Fix normal component
+            #     new_normal[i] = np.mean(ransac_line)
 
-            ax1.legend()
-            ax1.set_title('Components of calculated plane normal')
-            plt.draw()
+            # ax1.legend()
+            # ax1.set_title('Components of calculated plane normal')
+            # plt.draw()
 
             # Rotate based on mean normal
             rotation_mtx = rotMatrixFromNormal(*new_normal)
             frame = undistortImage(frame1, mtx, dst, True)
             output = rotateImagePlane(frame, mtx, rotation_mtx)
-            cv2.imshow('Recified frame', output)
-            # cv2.imwrite(f'2/frame{frame_count:0>3}')
+            # cv2.imshow('Recified frame', output)
+            cv2.imwrite(f'2/frame{frame_count:0>3}.jpg', output)
             frame_count += 1
+            # plt.close()
 
 
 
