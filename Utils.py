@@ -19,7 +19,8 @@ def goRansac(X, y, thresh, show_plot=False, label = ("Input", "Response")):
     outlier_mask = np.logical_not(inlier_mask)
 
     # Predict data of estimated models
-    line_X = np.arange(X.min(), X.max())[:, np.newaxis]
+    step = (X.max() - X.min()) / X.shape[0]
+    line_X = np.arange(X.min(), X.max() + step)[:, np.newaxis]
     # line_y = lr.predict(line_X)
     line_y_ransac = ransac.predict(line_X)
 
@@ -29,19 +30,20 @@ def goRansac(X, y, thresh, show_plot=False, label = ("Input", "Response")):
 
     if show_plot:
         lw = 2
-        plt.scatter(X[inlier_mask], y[inlier_mask], color='yellowgreen', marker='.',
+        fig, ax = plt.subplots()
+        ax.scatter(X[inlier_mask], y[inlier_mask], color='yellowgreen', marker='.',
                     label='Inliers')
-        plt.scatter(X[outlier_mask], y[outlier_mask], color='gold', marker='.',
+        ax.scatter(X[outlier_mask], y[outlier_mask], color='gold', marker='.',
                     label='Outliers')
         # plt.plot(line_X, line_y, color='navy', linewidth=lw, label='Linear fit')
-        plt.plot(line_X, line_y_ransac, color='cornflowerblue', linewidth=lw,
+        ax.plot(line_X, line_y_ransac, color='cornflowerblue', linewidth=lw,
                  label='RANSAC')
-        plt.legend(loc='lower right')
-        plt.xlabel(label[0])
-        plt.ylabel(label[1])
+        ax.legend(loc='lower right')
+        ax.set_title('RANSAC')
+
         plt.show()
         # plt.savefig('output/outliers_detection.png')
         plt.pause(0.1)
 
-    return inlier_mask
+    return inlier_mask, line_y_ransac.reshape(-1)
 

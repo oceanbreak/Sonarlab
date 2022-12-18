@@ -122,7 +122,11 @@ def rotateImagePlane(img, K, R):
     return cv2.normalize(tf_img, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)    
 
 
-def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, ransac_thresh=5, filter_step=10, show_point_cloud=False):
+def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
+                ransac_thresh=5,
+                filter_step=10,
+                show_point_cloud=False,
+                NORMALS_ONLY=False):
     """
     frame1 and frame2 are colored images of same size
     mtx and dst - are intrinsic matrix and distortion coefficients
@@ -153,20 +157,20 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
     ret = estimateInliers(matcher, kps1, kps2, ransac_thresh)
     if ret is not None:
         matches, H, status = ret
-        print(f'{len(matches)} matches found')
+        # print(f'{len(matches)} matches found')
     else:
-        print('No good features found')
+        # print('No good features found')
         return None
 
     # Computer essential matrix and recover R and T
     try:
         Ess, inliers, ptsA, ptsB = compute_essential_matrix(matches, status, kps1, kps2, mtx)
         _, R2, translate,  _ = cv2.recoverPose(Ess, np.float32(ptsA), np.float32(ptsB), mtx)
-        print(f'Essential matrix figured with {len(inliers)} inliers')
+        # print(f'Essential matrix figured with {len(inliers)} inliers')
 
-        print(f'{len(ptsA)} points before filtering outliers')
+        # print(f'{len(ptsA)} points before filtering outliers')
     except:
-        print('Failed to calculate essntial matrix')
+        # print('Failed to calculate essntial matrix')
         return frame1, np.float32([0, 0, 0]), []
 
 
@@ -175,12 +179,12 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
     ptsB = [ptsB[i] for i in range(len(ptsB)) if inliers[i]]
 
 
-    print(f'{len(ptsA)} points after filtering outliers')
+    # print(f'{len(ptsA)} points after filtering outliers')
 
     
     # filter points
-    ptsA = [ptsA[i] for i in range(0, len(ptsA), filter_step)]
-    ptsB = [ptsB[i] for i in range(0, len(ptsB), filter_step)]
+    # ptsA = [ptsA[i] for i in range(0, len(ptsA), filter_step)]
+    # ptsB = [ptsB[i] for i in range(0, len(ptsB), filter_step)]
 
 
     # Build projection matricies and triangulate points
@@ -199,10 +203,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
                                     ptsA.transpose(),
                                     ptsB.transpose())
 
-                                    
-
-
-
+    
     # Visualize point cloud
     if show_point_cloud:
         pcd = o3d.geometry.PointCloud()
@@ -225,7 +226,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
     # calib_points = np.float32([calib_points[i, :] for i in range(calib_points.shape[0]) if mask[i]])
 
 
-    print('Triangulation for 3d points figured')
+    # print('Triangulation for 3d points figured')
 
     # Estimating plane for 3d points
     calib_points = (points3d / points3d[-1, :]).transpose()
@@ -233,8 +234,15 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
     u, dd, v = np.linalg.svd(calib_points)
     v = v.transpose()
     a, b, c, d = v[:, -1]
+    if c < 0:
+        a, b, c, d = [-element for element in (a,b,c,d)]
+    nomal_abs = np.sqrt(a*a + b*b + c*c)
 
     print("Coefficients of the plane found: ", a,b,c,d)
+
+    # Returnb only plane normal, if flag says
+    if NORMALS_ONLY:
+        return None, np.float32([a/nomal_abs, b/nomal_abs, c/nomal_abs]), []
 
     # Calcilate distances CALIB from points to plane
     distances = []
@@ -243,7 +251,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
         x, y, z, _ = pt
         dist = (a*x + b*y + c*z + d) / sqr
         distances.append(dist)
-    print('Distances calculated')
+    # print('Distances calculated')
 
     # ut.goRansac(np.arange(len(distances)).reshape(-1, 1), 
     #                         np.float32(distances).reshape(-1, 1),
@@ -262,7 +270,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5, rans
     print('Rotated image figured\n\n')
     
 
-    return output, np.float32([a/d, b/d, c/d]), distances
+    return output, np.float32([a/nomal_abs, b/nomal_abs, c/nomal_abs]), distances
 
 
 
@@ -279,7 +287,7 @@ if __name__ == "__main__":
     print(npy_files)
     dst, mtx = [np.load(y) for y in npy_files]
 
-    video_file =  'D:\DATA\Videomodule video samples/R_20220930_145004_20220930_145401.avi'
+    video_file =  'D:\DATA\Videomodule video samples/test1.mp4'
     print(video_file)
     v = VideoPlayer()
     v.openVideoFile(video_file)
@@ -287,6 +295,7 @@ if __name__ == "__main__":
     v.getNextFrame()
     v.setFrameStep(1)
 
+    frame_count = 0
     while v.playing:
         v.show()
         frame1 = v.getCurrentFrame()
@@ -299,7 +308,7 @@ if __name__ == "__main__":
             normals = []
             iteration = 1
             
-            while iteration < 40:   
+            while iteration < 20:   
 
                 print(f"------ITERATION # {iteration}--------")
                 iteration += 1
@@ -328,19 +337,32 @@ if __name__ == "__main__":
 
                 c_key = cv2.waitKey(100)
 
-            plt.close()
-
-            angles = [np.arccos(coef[-1]) / np.linalg.norm(coef) for coef in normals]
             normals = np.float32(normals)
+            new_normal = [0.0, 0.0, 0.0]
             print(normals.shape)
-            axises = ['x', 'y', 'z']
-            fig, ax = plt.subplots()
-            for i in range(3):
-                ax.plot(np.arange(normals.shape[0]), normals[:,i], label=axises[i])
-
-            ax.legend()
-            ax.set_title('Angles between calculated normals and optical axis')
+            axises = ['X', 'Y', 'Z']
+            fig1, ax1 = plt.subplots()
             plt.show(block=False)
+            for i in range(3):
+                X = np.arange(normals.shape[0])
+                Y = normals[:,i]
+                ax1.scatter(X,Y, label=f"{axises[i]} component")
+                mask, ransac_line = ut.goRansac(X.reshape(-1, 1), Y.reshape(-1,1), thresh = 0.1, show_plot=False)
+                ax1.plot(X, ransac_line, label=f'RANSAC fitted {axises[i]}')
+                # Fix normal component
+                new_normal[i] = np.mean(ransac_line)
+
+            ax1.legend()
+            ax1.set_title('Components of calculated plane normal')
+            plt.draw()
+
+            # Rotate based on mean normal
+            rotation_mtx = rotMatrixFromNormal(*new_normal)
+            frame = undistortImage(frame1, mtx, dst, True)
+            output = rotateImagePlane(frame, mtx, rotation_mtx)
+            cv2.imshow('Recified frame', output)
+            # cv2.imwrite(f'2/frame{frame_count:0>3}')
+            frame_count += 1
 
 
 
