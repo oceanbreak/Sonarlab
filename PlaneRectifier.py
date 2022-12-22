@@ -21,6 +21,65 @@ import open3d as o3d
 
 # Util functions
 
+def computeTranslationVector(kpsA, kpsB, mtx):
+    """
+    Calculation of translation vetor of camera between two images,
+    assuming camera tranlsates only, not rotates
+    """
+
+    # Intrinsic parameters
+    fx = mtx[0, 0]
+    fy = mtx[1, 1]
+    cx = mtx[0, -1]
+    cy = mtx[1, -1]
+
+
+     # Matrix for vanihing point calc
+    eq_motion_v_matrix = []
+    for X1, X2 in zip(kpsA, kpsB):
+        x1, y1, x2, y2 = [*X1, *X2]
+
+        # Calculate coefficients for translation vector calc
+        xx1 = x1 - cx
+        xx2 = x2 - cx
+        yy1 = y1 - cy
+        yy2 = y2 - cy
+        tx_coef = yy1*fx - yy2*fy
+        ty_coef = xx2*fx - xx1*fy
+        tz_coef = yy2*xx1 - yy1*xx2
+        # print(tz_coef, xx1, xx2, yy1, yy2)
+        eq_motion_v_matrix.append([tx_coef, ty_coef, tz_coef])
+
+    # Calculate motion vector
+    # print("EQ MATRIX:", eq_motion_v_matrix)
+    eq_motion_v_matrix = np.array(eq_motion_v_matrix)
+    u, d, v = np.linalg.svd(eq_motion_v_matrix)
+    v = v.transpose()
+
+    tx = v[0,-1]
+    ty = v[1,-1]
+    tz = v[2,-1]
+    print('TRANSLATION:', [tx,ty,tz])
+
+    tAbs = np.sqrt(tx*tx + ty*ty + tz*tz)
+
+    # Visualize
+    print('VISUALIZING TRANSLATION')
+    kanvas = np.ones((128,128,3)).astype('uint8')*255
+    pt0 = (64,64)
+    v_x = int(64 * tx / tAbs)
+    v_y = int(64 * ty / tAbs)
+    pt1 = (64 + v_x, 64 + v_y)
+    cv2.line(kanvas, pt0, pt1, (255, 0, 0), 2)
+    cv2.circle(kanvas, pt0, 5, (0,255,0), 2)
+    cv2.circle(kanvas, pt1, 5, (255,0,0), 2)
+    cv2.imshow('DIR', kanvas)
+    cv2.waitKey(10)
+
+    return np.float32([tx/tAbs, ty/tAbs, tz/tAbs])
+
+
+
 def compute_essential_matrix(matches, status, kpsA, kpsB, intrinsic, method=cv2.FM_RANSAC, threshold=0.2, prob=0.6):
     """Use the set of good mathces to estimate the Essential Matrix.
 
@@ -47,7 +106,11 @@ def compute_essential_matrix(matches, status, kpsA, kpsB, intrinsic, method=cv2.
             prob = prob
 #             threshold = 3
         )
-    return essential_matrix, inliers, pts1, pts2
+
+    ptsA = [pts1[i] for i in range(len(pts1)) if inliers[i]]
+    ptsB = [pts2[i] for i in range(len(pts2)) if inliers[i]]
+    
+    return essential_matrix, inliers, ptsA, ptsB
 
 
 
@@ -63,7 +126,7 @@ def getGoodKps(kpsA, kpsB, matches, status):
             ptB = (kpsB[trainIdx][0], kpsB[trainIdx][1])
             pts1.append(ptA)
             pts2.append(ptB)
-    return np.array(pts1), np.array(pts1)
+    return np.array(pts1), np.array(pts2)
 
 
 def rotMatrixFromNormal(a,b,c):
@@ -126,6 +189,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
                 ransac_thresh=5,
                 filter_step=10,
                 show_point_cloud=False,
+                show_images = True,
                 NORMALS_ONLY=False):
     """
     frame1 and frame2 are colored images of same size
@@ -139,6 +203,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     dst = dst_in
     mtx[-1,-1] = 1.0
 
+
     frame1 = undistortImage(img1, mtx_in, dst_in, False)
     frame2 = undistortImage(img2, mtx_in, dst_in, False)
 
@@ -147,6 +212,8 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
 
     frame1 = eqHist(frame1)
     frame2 = eqHist(frame2)
+
+    h,w  = frame1.shape[:2]
     
 
     # Detect featers and estimate inliers
@@ -162,29 +229,38 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         # print('No good features found')
         return None
 
+    if show_images:
+        sh_f = drawMatches(frame1, frame2, kps1, kps2, matches, status)
+        sh_f = cv2.resize(sh_f, (1024, 400))
+        shifted_frame = cv2.warpPerspective(frame2, H, (w,h))
+        cv2.imshow("WARP", frame1)
+        cv2.waitKey(1000)
+        cv2.imshow("WARP",shifted_frame)
+        cv2.waitKey(1000)
+        cv2.imshow('Matches', sh_f)
+        cv2.waitKey(10)
+
     # Computer essential matrix and recover R and T
     try:
-        Ess, inliers, ptsA, ptsB = compute_essential_matrix(matches, status, kps1, kps2, mtx)
-        _, R2, translate,  _ = cv2.recoverPose(Ess, np.float32(ptsA), np.float32(ptsB), mtx)
-        # print(f'Essential matrix figured with {len(inliers)} inliers')
 
-        # print(f'{len(ptsA)} points before filtering outliers')
-    except:
+        # Ess, inliers, ptsA, ptsB = compute_essential_matrix(matches, status, kps1, kps2, mtx)
+        # _, R2, translate,  _ = cv2.recoverPose(Ess, np.float32(ptsA), np.float32(ptsB), mtx)
+
+
+        # COMPUTE TRANSLATION DIRECTLY
+        ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
+        R2 = np.identity(3)
+        translate = computeTranslationVector(ptsA, ptsB, mtx)
+        with open('trans_vector.csv', 'a') as fr:
+            fr.write(';'.join([str(e) for e in translate]) + '\n')
+
+    except TypeError:
         # print('Failed to calculate essntial matrix')
         return frame1, np.float32([0, 0, 0]), []
 
 
-    # filter outliers
-    ptsA = [ptsA[i] for i in range(len(ptsA)) if inliers[i]]
-    ptsB = [ptsB[i] for i in range(len(ptsB)) if inliers[i]]
-
-
-    # print(f'{len(ptsA)} points after filtering outliers')
-
-    
-    # filter points
-    # ptsA = [ptsA[i] for i in range(0, len(ptsA), filter_step)]
-    # ptsB = [ptsB[i] for i in range(0, len(ptsB), filter_step)]
+    #TRY ZEERO OUT ROATTION
+    # R2 = np.identity(3)
 
 
     # Build projection matricies and triangulate points
@@ -231,7 +307,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     # Estimating plane for 3d points
     calib_points = (points3d / points3d[-1, :]).transpose()
 
-    u, dd, v = np.linalg.svd(calib_points)
+    _, _, v = np.linalg.svd(calib_points)
     v = v.transpose()
     a, b, c, d = v[:, -1]
     if c < 0:
@@ -251,17 +327,6 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         x, y, z, _ = pt
         dist = (a*x + b*y + c*z + d) / sqr
         distances.append(dist)
-    # print('Distances calculated')
-
-    # ut.goRansac(np.arange(len(distances)).reshape(-1, 1), 
-    #                         np.float32(distances).reshape(-1, 1),
-    #                         thresh = 0.4,
-    #                         show_plot=True)
-
-        
-    # plt.scatter(np.arange(len(distances)), distances)
-    # plt.show()
-    
 
     # Rotate 1st imput frame
     rotation_mtx = rotMatrixFromNormal(a,b,c)
@@ -288,7 +353,7 @@ if __name__ == "__main__":
     dst, mtx = [np.load(y) for y in npy_files]
 
     PATH = 'D:\DATA\Videomodule video samples/'
-    FILE = 'R_20210628_005649_20210628_010047.avi'
+    FILE = 'Bottom_test_02.mp4'
 
     video_file =  PATH + FILE
     print(video_file)
@@ -299,7 +364,7 @@ if __name__ == "__main__":
     v.getNextFrame()
 
     # Set how many frames to skip
-    v.setFrameStep(5)
+    v.setFrameStep(1)
 
     frame_count = 0
     while v.playing:
@@ -315,7 +380,7 @@ if __name__ == "__main__":
             c_key = 0
             normals = []
             iteration = 0
-            rec_step=18
+            rec_step=8
             
             while iteration < 1:   
 
@@ -333,7 +398,10 @@ if __name__ == "__main__":
                 # sh_f2 = cv2.resize(frame2, new_shape)
                 # # cv2.imshow('frame2', sh_f2)
 
-                rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.2, filter_step=1)
+                rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.6, filter_step=1,
+                lo_ratio=0.7,
+                ransac_thresh=3,
+                show_images=False)
                 if rec_ret is None:
                      break
 
@@ -343,45 +411,14 @@ if __name__ == "__main__":
                 rec_show = cv2.resize(rectified, new_shape)
                 cv2.imshow('Recified frame', rec_show)
 
-                # plt.clf()
-                # plt.scatter(np.arange(len(distances)), distances)
-                # plt.show(block=False)
-                # plt.draw()
 
                 # Save normals to file
                 with open(f'normals_{FILE[:-4]}.csv', 'a') as f:
                     f.write(";".join([str(v.cur_frame_no)] + [str(a) for a in coeffs]) + '\n')
 
-                # plt.savefig('temp.png')
-                # plt.clf()
-                # temp = cv2.imread('temp.png')
-                # cv2.imshow('Distances scatter', temp)
 
                 c_key = cv2.waitKey(1)
 
-            normals = np.float32(normals)
-            new_normal = [0.0, 0.0, 0.0]
-
-            axises = ['X', 'Y', 'Z']
-            # fig1, ax1 = plt.subplots()
-            # plt.show(block=False)
-            # for i in range(3):
-            #     X = np.arange(normals.shape[0])
-            #     Y = normals[:,i]
-            #     ax1.scatter(X,Y, label=f"{axises[i]} component")
-            #     mask, ransac_line = ut.goRansac(X.reshape(-1, 1), Y.reshape(-1,1), thresh = 0.1, show_plot=False)
-            #     ax1.plot(X, ransac_line, label=f'RANSAC fitted {axises[i]}')
-            #     # Fix normal component
-            #     new_normal[i] = np.mean(ransac_line)
-
-            # ax1.legend()
-            # ax1.set_title('Components of calculated plane normal')
-            # plt.draw()
-
-            # Rotate based on mean normal
-            rotation_mtx = rotMatrixFromNormal(*new_normal)
-            frame = undistortImage(frame1, mtx, dst, True)
-            output = rotateImagePlane(frame, mtx, rotation_mtx)
 
             # cv2.imshow('Recified frame', output)
             # cv2.imwrite(f'2/frame{frame_count:0>3}.jpg', output)
