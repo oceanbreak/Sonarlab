@@ -33,11 +33,16 @@ def computeTranslationVector(kpsA, kpsB, mtx):
     cx = mtx[0, -1]
     cy = mtx[1, -1]
 
+    vec_sign = 0
+
 
      # Matrix for vanihing point calc
     eq_motion_v_matrix = []
     for X1, X2 in zip(kpsA, kpsB):
         x1, y1, x2, y2 = [*X1, *X2]
+
+        # Count all vectors for y direcion for making sure motion is positive
+        vec_sign += y1 - y2
 
         # Calculate coefficients for translation vector calc
         xx1 = x1 - cx
@@ -56,9 +61,15 @@ def computeTranslationVector(kpsA, kpsB, mtx):
     u, d, v = np.linalg.svd(eq_motion_v_matrix)
     v = v.transpose()
 
-    tx = v[0,-1]
-    ty = v[1,-1]
-    tz = v[2,-1]
+    # Ensure x vector results as positive motion
+    if v[1,-1] * vec_sign > 0:
+        tx = v[0,-1]
+        ty = v[1,-1]
+        tz = v[2,-1]
+    else:
+        tx = -v[0,-1]
+        ty = -v[1,-1]
+        tz = -v[2,-1]
     print('TRANSLATION:', [tx,ty,tz])
 
     tAbs = np.sqrt(tx*tx + ty*ty + tz*tz)
@@ -76,7 +87,7 @@ def computeTranslationVector(kpsA, kpsB, mtx):
     cv2.imshow('DIR', kanvas)
     cv2.waitKey(10)
 
-    return np.float32([tx/tAbs, ty/tAbs, tz/tAbs])
+    return np.float32([tx, ty, tz])
 
 
 
@@ -372,7 +383,7 @@ if __name__ == "__main__":
         print(f'Frame {v.cur_frame_no} of {v.vid_frame_length}')
         frame1 = v.getCurrentFrame()
         h, w, _ = frame1.shape
-        new_shape = (w//4, h//4)
+        new_shape = (w//2, h//2)
         # key = v.waitKeyHandle()
         # if key == ord('F'):
         if v.playing:
