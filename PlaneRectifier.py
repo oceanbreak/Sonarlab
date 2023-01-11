@@ -237,8 +237,8 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         matches, H, status = ret
         # print(f'{len(matches)} matches found')
     else:
-        # print('No good features found')
-        return None
+        print('No good features found')
+        return frame1, np.float32([0, 0, 0]), []
 
     if show_images:
         sh_f = drawMatches(frame1, frame2, kps1, kps2, matches, status)
@@ -262,10 +262,10 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
         R2 = np.identity(3)
         translate = computeTranslationVector(ptsA, ptsB, mtx)
-        with open('trans_vector.csv', 'a') as fr:
-            fr.write(';'.join([str(e) for e in translate]) + '\n')
+        # with open('trans_vector.csv', 'a') as fr:
+        #     fr.write(';'.join([str(e) for e in translate]) + '\n')
 
-    except TypeError:
+    except (TypeError, np.linalg.LinAlgError):
         # print('Failed to calculate essntial matrix')
         return frame1, np.float32([0, 0, 0]), []
 
@@ -364,7 +364,7 @@ if __name__ == "__main__":
     dst, mtx = [np.load(y) for y in npy_files]
 
     PATH = 'D:\DATA\Videomodule video samples/'
-    FILE = 'Bottom_test_02.mp4'
+    FILE = 'R_20220930_145004_20220930_145401.avi'
 
     video_file =  PATH + FILE
     print(video_file)
@@ -375,7 +375,7 @@ if __name__ == "__main__":
     v.getNextFrame()
 
     # Set how many frames to skip
-    v.setFrameStep(1)
+    v.setFrameStep(5)
 
     frame_count = 0
     while v.playing:
@@ -383,7 +383,7 @@ if __name__ == "__main__":
         print(f'Frame {v.cur_frame_no} of {v.vid_frame_length}')
         frame1 = v.getCurrentFrame()
         h, w, _ = frame1.shape
-        new_shape = (w//2, h//2)
+        new_shape = (w//4, h//4)
         # key = v.waitKeyHandle()
         # if key == ord('F'):
         if v.playing:
@@ -409,7 +409,7 @@ if __name__ == "__main__":
                 # sh_f2 = cv2.resize(frame2, new_shape)
                 # # cv2.imshow('frame2', sh_f2)
 
-                rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.6, filter_step=1,
+                rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.2, filter_step=1,
                 lo_ratio=0.7,
                 ransac_thresh=3,
                 show_images=False)
