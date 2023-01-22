@@ -8,14 +8,14 @@ Then a plane that fits all the points is found. Then original image is rotated b
 of the normal of the found plane, so then image becomes planar and one may accurately calculate linear sizes.
 """
 
-from SonarImaging import drawPoints
-from SonarImaging import undistortImage
-from SonarImaging import detectKeypoints, drawMatches, eqHist, matchKeypoints, estimateInliers
+from Sonarlab.SonarImaging import drawPoints
+from Sonarlab.SonarImaging import undistortImage
+from Sonarlab.SonarImaging import detectKeypoints, drawMatches, eqHist, matchKeypoints, estimateInliers
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 from skimage import io, filters, transform
-import Utils as ut
+import Sonarlab.Utils as ut
 import pandas as pd 
 import open3d as o3d
 
@@ -363,8 +363,8 @@ if __name__ == "__main__":
     print(npy_files)
     dst, mtx = [np.load(y) for y in npy_files]
 
-    PATH = 'D:\DATA\Videomodule video samples/'
-    FILE = 'R_20220930_145004_20220930_145401.avi'
+    PATH = 'D:\DATA\Videomodule video samples/shaky_clean/'
+    FILE = 'shaky_clean_7494_01.mp4'
 
     video_file =  PATH + FILE
     print(video_file)
@@ -375,7 +375,7 @@ if __name__ == "__main__":
     v.getNextFrame()
 
     # Set how many frames to skip
-    v.setFrameStep(5)
+    v.setFrameStep(1)
 
     frame_count = 0
     while v.playing:
@@ -391,7 +391,7 @@ if __name__ == "__main__":
             c_key = 0
             normals = []
             iteration = 0
-            rec_step=8
+            rec_step=18
             
             while iteration < 1:   
 
