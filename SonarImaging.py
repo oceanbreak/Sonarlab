@@ -298,6 +298,18 @@ class VideoPlayer:
         else:
             print('WARNING: Corrupt frame')
 
+
+    def jumpToFrame(self, frame_no):
+        """
+        Jump to specified frame number
+        """
+        if self.vid_frame_length > frame_no > 0:
+            self.cur_frame_no = frame_no
+            self.video.set(1, self.cur_frame_no)
+            self.getNextFrame()
+        else:
+            print(f'{frame_no} is out of bounds for video of length {self.vid_frame_length}')
+
     
     def playStepForwards(self):
         """
