@@ -353,6 +353,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
 if __name__ == "__main__":
 
     from tkinter import filedialog
+    import os
     import glob
     from SonarImaging import VideoPlayer
     # from scipy.spatial.transform import Rotation as Rot
@@ -363,77 +364,103 @@ if __name__ == "__main__":
     print(npy_files)
     dst, mtx = [np.load(y) for y in npy_files]
 
-    PATH = 'D:\DATA\Videomodule video samples/shaky_clean/'
-    FILE = 'shaky_clean_7494_01.mp4'
+    PATH = 'D:\Clouds\Seafile\Анисимов\OCEAN\Дисер\work\DATA_FOR ANALYZE\Videomodule_Bits\AMK-81'
+    video_files = glob.glob(os.path.join(PATH, '*.mp4'))
 
-    video_file =  PATH + FILE
-    print(video_file)
-    v = VideoPlayer()
-    v.openVideoFile(video_file)
-    v.setScaleFactor(4)
+    for video_file in video_files:
+        FILE = os.path.split(video_file)[-1]
+        print(FILE)
+        v = VideoPlayer()
+        v.openVideoFile(video_file)
+        v.setScaleFactor(4)
 
-    v.getNextFrame()
+        v.getNextFrame()
 
-    # Set how many frames to skip
-    v.setFrameStep(1)
+        # Set how many frames to skip
+        v.setFrameStep(5)
 
-    frame_count = 0
-    while v.playing:
+        frame_count = 0
+        while v.playing:
 
-        print(f'Frame {v.cur_frame_no} of {v.vid_frame_length}')
-        frame1 = v.getCurrentFrame()
-        h, w, _ = frame1.shape
-        new_shape = (w//4, h//4)
-        # key = v.waitKeyHandle()
-        # if key == ord('F'):
-        if v.playing:
+            print(f'Frame {v.cur_frame_no} of {v.vid_frame_length}')
+            frame1 = v.getCurrentFrame()
+            h, w, _ = frame1.shape
+            new_shape = (w//4, h//4)
+            # key = v.waitKeyHandle()
+            prev_normal = [0.0, 0.0, 1.0]
+            # if key == ord('F'):
+            if v.playing:
 
-            c_key = 0
-            normals = []
-            iteration = 0
-            rec_step=18
-            
-            while iteration < 1:   
+                c_key = 0
+                normals = []
+                iteration = 5
+                rec_step=2
+                max_iter = 35
+                cosine = 0.0
+                
+                while iteration < max_iter and cosine < 0.98 :   
 
-                print(f"------ITERATION # {iteration}--------")
-                iteration += 1
+                    print(f"------ITERATION # {iteration}--------")
+                    print(f"Cosine figured =  {cosine}")
+                    iteration += 1
 
-                try:
-                    v.video.set(1, v.cur_frame_no + rec_step)
-                except:
-                    v.video.set(1, v.cur_frame_no - rec_step)
-                # v.getNextFrame()
-                # frame2 = v.getCurrentFrame()
-                ret, frame2 = v.video.read()
+                    if v.cur_frame_no +  rec_step *  iteration < v.vid_frame_length:
+                        print('ATTEMPT FRAME PLUS', v.cur_frame_no + rec_step *  iteration)
+                        v.video.set(1, v.cur_frame_no + rec_step * iteration)
+                        ret, frame2 = v.video.read()
+                        v.video.set(1, v.cur_frame_no)
+                    else:
+                        print('ATTEMPT FRAME MINUS', v.cur_frame_no - rec_step  *  iteration)
+                        v.video.set(1, v.cur_frame_no - rec_step  *  iteration)
+                        ret, frame2 = v.video.read()
+                        v.video.set(1, v.cur_frame_no)
+                    # v.getNextFrame()
+                    # frame2 = v.getCurrentFrame()
+                    
 
-                # sh_f2 = cv2.resize(frame2, new_shape)
-                # # cv2.imshow('frame2', sh_f2)
+                    # sh_f2 = cv2.resize(frame2, new_shape)
+                    # # cv2.imshow('frame2', sh_f2)
 
-                rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.2, filter_step=1,
-                lo_ratio=0.7,
-                ransac_thresh=3,
-                show_images=False)
-                if rec_ret is None:
-                     break
+                    rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.2, filter_step=1,
+                    lo_ratio=0.7,
+                    ransac_thresh=3,
+                    show_images=False)
+                    
+                    if rec_ret is None:
+                        pass
+                    else:
+                        rectified, coeffs, distances = rec_ret
+                        cosine = coeffs[-1] / ((coeffs[0]**2 + coeffs[1]**2 + coeffs[2] **2) ** 0.5)
 
-                rectified, coeffs, distances = rec_ret
-                normals.append(coeffs)
+                
+                # CHECK FOR COSINE TO BE CLOSE TO 1
+                print('PLANE normal: ', coeffs)
+                cosine = coeffs[-1] / ((coeffs[0]**2 + coeffs[1]**2 + coeffs[2] **2) ** 0.5)
+                if cosine > 0.98:
+                    normals.append(coeffs)
+                    prev_normal = coeffs
+                    normal = coeffs
+                else:
+                    print(' ----  COSINE BAD -----')
+                    normals.append(prev_normal)
+                    normal = prev_normal
 
                 rec_show = cv2.resize(rectified, new_shape)
                 cv2.imshow('Recified frame', rec_show)
 
 
                 # Save normals to file
-                with open(f'normals_{FILE[:-4]}.csv', 'a') as f:
-                    f.write(";".join([str(v.cur_frame_no)] + [str(a) for a in coeffs]) + '\n')
+                fname = f'normals_{FILE[:-4]}.csv'
+                with open(os.path.join(PATH, fname), 'a') as f:
+                    f.write(";".join([str(v.cur_frame_no)] + [str(a) for a in normal]) + '\n')
 
 
                 c_key = cv2.waitKey(1)
 
 
-            # cv2.imshow('Recified frame', output)
-            # cv2.imwrite(f'2/frame{frame_count:0>3}.jpg', output)
-            frame_count += 1
-            # plt.close()
-            v.playStepForwards()
-            # v.show()
+                # cv2.imshow('Recified frame', output)
+                # cv2.imwrite(f'2/frame{frame_count:0>3}.jpg', output)
+                frame_count += 1
+                # plt.close()
+                v.playStepForwards()
+                # v.show()
