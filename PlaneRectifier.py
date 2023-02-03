@@ -199,6 +199,7 @@ def rotateImagePlane(img, K, R):
 def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
                 ransac_thresh=5,
                 filter_step=10,
+                crop=True,
                 show_point_cloud=False,
                 show_images = True,
                 NORMALS_ONLY=False):
@@ -341,7 +342,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
 
     # Rotate 1st imput frame
     rotation_mtx = rotMatrixFromNormal(a,b,c)
-    frame = undistortImage(img1, mtx_in, dst_in, True)
+    frame = undistortImage(img1, mtx_in, dst_in, crop=crop)
     output = rotateImagePlane(frame, mtx_in, rotation_mtx)
     print('Rotated image figured\n\n')
     
