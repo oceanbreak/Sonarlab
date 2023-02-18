@@ -89,6 +89,48 @@ def computeTranslationVector(kpsA, kpsB, mtx):
 
     return np.float32([tx, ty, tz])
 
+def computePlaneNormal(kpsA, kpsB, mtx, trans_vector):
+    # Intrinsic parameters
+    fx = mtx[0, 0]
+    fy = mtx[1, 1]
+    f = (fx+fy)/2
+    cx = mtx[0, -1]
+    cy = mtx[1, -1]
+    TX, TY, TZ = trans_vector
+
+    vec_sign = 0
+
+
+     # Matrix for vanihing point calc
+    eq_matrix_pure_plane =  []
+    for X1, X2 in zip(kpsA, kpsB):
+        x0, y0, x1, y1 = [*X1, *X2]
+
+        A = f*TX*x0 - x1*x0*TZ
+        B = f*TX*y0 - x1*y0*TZ
+        C = f*x1 - f*x0
+        D = x1*TZ*f - f*f*TX
+
+        A1 = f*TY*x0 - y1*x0*TZ
+        B1 = f*TY*y0 - y1*y0*TZ
+        C1 = f*y1 - f*y0
+        D1 = y1*TZ*f - f*f*TY
+
+        if all([A,B,C,D,A1,B1,C1,D1]) > 0.001:
+            eq_matrix_pure_plane.append([A,B,C,D])
+            eq_matrix_pure_plane.append([A1,B1,C1,D1])
+
+    eq_matrix_pure_plane = np.array(eq_matrix_pure_plane)
+    (u, d, v) = np.linalg.svd(eq_matrix_pure_plane)
+    v = v.transpose()
+
+    # Plane coefs
+    aa = v[-1,0] / v[-1,-1]
+    bb = v[-1,1] / v[-1,-1]
+    dd = v[-1,2] / v[-1,-1]
+    cc = -1.0
+
+    return np.array([aa,bb,cc,dd])
 
 
 def compute_essential_matrix(matches, status, kpsA, kpsB, intrinsic, method=cv2.FM_RANSAC, threshold=0.2, prob=0.6):
@@ -255,10 +297,6 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     # Computer essential matrix and recover R and T
     try:
 
-        # Ess, inliers, ptsA, ptsB = compute_essential_matrix(matches, status, kps1, kps2, mtx)
-        # _, R2, translate,  _ = cv2.recoverPose(Ess, np.float32(ptsA), np.float32(ptsB), mtx)
-
-
         # COMPUTE TRANSLATION DIRECTLY
         ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
         R2 = np.identity(3)
@@ -269,11 +307,6 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     except (TypeError, np.linalg.LinAlgError):
         # print('Failed to calculate essntial matrix')
         return frame1, np.float32([0, 0, 0]), []
-
-
-    #TRY ZEERO OUT ROATTION
-    # R2 = np.identity(3)
-
 
     # Build projection matricies and triangulate points
     ptsA = np.float32(ptsA)
@@ -298,24 +331,6 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         pcd.points = o3d.utility.Vector3dVector(calib_points)
         o3d.visualization.draw_geometries([pcd])
 
-    # calib_points = (points3d / points3d[-1, :]).transpose()
-
-    # msk1 = ut.goRansac(calib_points[:, 0].reshape(-1, 1), 
-    #             calib_points[:, 2].reshape(-1, 1), 
-    #             thresh = 2,
-    #             show_plot=True)
-    # msk2 = ut.goRansac(calib_points[:, 0].reshape(-1, 1), 
-    #             calib_points[:, 1].reshape(-1, 1), 
-    #             thresh = 2,
-    #             show_plot=True)
-    
-    # mask = msk1 * msk2
-
-    # calib_points = np.float32([calib_points[i, :] for i in range(calib_points.shape[0]) if mask[i]])
-
-
-    # print('Triangulation for 3d points figured')
-
     # Estimating plane for 3d points
     calib_points = (points3d / points3d[-1, :]).transpose()
 
@@ -327,6 +342,8 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     nomal_abs = np.sqrt(a*a + b*b + c*c)
 
     print("Coefficients of the plane found: ", a,b,c,d)
+    print('Another ones:', computePlaneNormal(ptsA, ptsB, mtx, translate))
+    # a,b,c,d = computePlaneNormal(ptsA, ptsB, mtx, translate)
 
     # Returnb only plane normal, if flag says
     if NORMALS_ONLY:
