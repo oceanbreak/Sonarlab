@@ -424,6 +424,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
 
     # Calc abs motion
     abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
+    print('POINTS SHAPE:', ptsA.shape, 'ABS MOTION:', abs_motion)
 
     # Build projection matricies and triangulate points
     ptsA = np.float32(ptsA)
@@ -499,8 +500,9 @@ if __name__ == "__main__":
     print(npy_files)
     dst, mtx = [np.load(y) for y in npy_files]
 
-    PATH = 'D:\Clouds\Seafile\Анисимов\OCEAN\Дисер\work\DATA_FOR ANALYZE\Videomodule_Bits\AMK-81'
-    video_files = glob.glob(os.path.join(PATH, '*.mp4'))
+    PATH = 'D:\DATA'
+    video_files = glob.glob(os.path.join(PATH, '*.mp4')) + \
+            glob.glob(os.path.join(PATH, '*.avi'))
 
     for video_file in video_files:
         FILE = os.path.split(video_file)[-1]
@@ -528,16 +530,19 @@ if __name__ == "__main__":
 
                 c_key = 0
                 normals = []
-                iteration = 5
+                motions = []
+                iteration = 10
+                iteration_step = 5
                 rec_step=2
-                max_iter = 35
+                max_iter = 50
                 cosine = 0.0
+                motion = 1
                 
-                while iteration < max_iter and cosine < 0.1 :   
+                while iteration < max_iter and motion < 35 :   
 
                     print(f"------ITERATION # {iteration}--------")
                     print(f"Cosine figured =  {cosine}")
-                    iteration += 1
+                    iteration += iteration_step
 
                     if v.cur_frame_no +  rec_step *  iteration < v.vid_frame_length:
                         print('ATTEMPT FRAME PLUS', v.cur_frame_no + rec_step *  iteration)
@@ -564,14 +569,16 @@ if __name__ == "__main__":
                     if rec_ret is None:
                         pass
                     else:
-                        rectified, coeffs, distances = rec_ret
-                        cosine = coeffs[-1] / ((coeffs[0]**2 + coeffs[1]**2 + coeffs[2] **2) ** 0.5)
+                        rectified, coeffs, extra_info = rec_ret
+                        motion = extra_info[1]
+                        motions.append(motion)
+                        # cosine = coeffs[-1] / ((coeffs[0]**2 + coeffs[1]**2 + coeffs[2] **2) ** 0.5)
 
                 
                 # CHECK FOR COSINE TO BE CLOSE TO 1
                 print('PLANE normal: ', coeffs)
                 cosine = coeffs[-1] / ((coeffs[0]**2 + coeffs[1]**2 + coeffs[2] **2) ** 0.5)
-                if cosine > 0.98:
+                if cosine > 0.6:
                     normals.append(coeffs)
                     prev_normal = coeffs
                     normal = coeffs
@@ -582,6 +589,7 @@ if __name__ == "__main__":
 
                 rec_show = cv2.resize(rectified, new_shape)
                 cv2.imshow('Recified frame', rec_show)
+
 
 
                 # # Save normals to file
@@ -599,3 +607,6 @@ if __name__ == "__main__":
                 # plt.close()
                 v.playStepForwards()
                 # v.show()
+        fig, ax = plt.subplots()
+        ax.plot(motions)
+        plt.show()
