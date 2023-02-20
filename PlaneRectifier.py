@@ -363,11 +363,12 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     mtx and dst - are intrinsic matrix and distortion coefficients
     SCALE_FACTOR is a multipliter for image size
     """
+    # Motion in frame array
+    motion_in_frame = 0.0
 
     # Resize input images if scalea-fractor is specified
     new_shape = (int(img1.shape[1] * SCALE_FACTOR), int(img1.shape[0] * SCALE_FACTOR))
     mtx = mtx_in * SCALE_FACTOR
-    dst = dst_in
     mtx[-1,-1] = 1.0
 
 
@@ -420,6 +421,9 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     except (TypeError, np.linalg.LinAlgError):
         # print('Failed to calculate essntial matrix')
         return frame1, np.float32([0, 0, 0]), []
+
+    # Calc abs motion
+    abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
 
     # Build projection matricies and triangulate points
     ptsA = np.float32(ptsA)
@@ -477,7 +481,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     print('Rotated image figured\n\n')
     
 
-    return output, np.float32([a/nomal_abs, b/nomal_abs, c/nomal_abs]), distances
+    return output, np.float32([a/nomal_abs, b/nomal_abs, c/nomal_abs]), (distances, abs_motion)
 
 
 
