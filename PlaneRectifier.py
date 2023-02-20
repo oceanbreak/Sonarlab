@@ -89,6 +89,118 @@ def computeTranslationVector(kpsA, kpsB, mtx):
 
     return np.float32([tx, ty, tz])
 
+
+def computeTranslationVector2(kpsA, kpsB, mtx):
+    """
+    Calculation of translation vetor of camera between two images,
+    assuming camera tranlsates only, not rotates
+    """
+
+    # Intrinsic parameters
+    fx = mtx[0, 0]
+    fy = mtx[1, 1]
+    f = (fx + fy)/2
+    cx = mtx[0, -1]
+    cy = mtx[1, -1]
+
+    vec_sign = 0
+
+
+     # Matrix for vanihing point calc
+    equation_matrix = []
+    for X1, X2 in zip(kpsA, kpsB):
+        x1, y1, x2, y2 = [*X1, *X2]
+        x1 = x1 - cx
+        x2 = x2 - cx
+        y1 = y1 - cy
+        y2 = y2 - cy
+
+        # Count all vectors for y direcion for making sure motion is positive
+        vec_sign += y1 - y2
+
+        # Calculate coefficients for translation vector calc
+        # Params for VP
+        a = y2 - y1
+        b = x1 - x2
+        c = x2*y1 - x1*y2
+        equation_matrix.append([a, b, c])
+
+    # Calculate motion vector
+    # print("EQ MATRIX:", eq_motion_v_matrix)
+
+    equation_matrix = np.array(equation_matrix)
+    (u, d, v) = np.linalg.svd(equation_matrix)
+    v = v.transpose()
+    x = v[0,-1]
+    y = v[1,-1]
+    z = v[2,-1]
+    print( 'Vanishing point: ' + str([x,y,z]))
+    vanish_point = (int(x/z), int(y/z))
+    print(vanish_point)
+    sqr = np.sqrt(x*x + y*y + z*z)
+
+    # Estimate sign of T-vector
+    directions = []
+    x_dirs = []
+    y_dirs = []
+    for X1, X2 in zip(kpsA, kpsB):
+        x1, y1, x2, y2 = [*X1, *X2]
+        directions.append( (x2-x1)*(vanish_point[0] - x1) + (y2-y1)*(vanish_point[1] - x1) )
+        x_dirs.append(x2-x1)
+        y_dirs.append(y2-y1)
+        
+    x_sign = np.sign(np.average(x_dirs))
+    y_sign = np.sign(np.average(y_dirs))
+    z_sign = np.sign(np.average(directions))
+
+    print('SIGN OF X TRANSLATION =', x_sign)
+    print('SIGN OF Y TRANSLATION =', y_sign)
+    print('SIGN OF Z TRANSLATION =', z_sign)
+
+
+    # Calculate T-vector
+    tx = x/sqr
+    ty = y/sqr
+    tz=  z*f/sqr
+
+    # Place right sign with respect to most component
+    if tz**2/(tx*tx + ty*ty) > 1:
+        # Replace with Z sign
+        if np.sign(tz) != z_sign:
+            tx = -tx
+            ty = -ty
+            tz = -tz
+    elif np.sign(tx) != x_sign:
+        # Replace with X sign
+        if np.sign(tx) * x_sign < 0:
+            tx = -tx
+            ty = -ty
+            tz = -tz
+    else:
+        # Replace with Y sign
+        if np.sign(ty) != y_sign:
+            tx = -tx
+            ty = -ty
+            tz = -tz  
+
+    tAbs = np.sqrt(tx*tx + ty*ty + tz*tz)
+
+    # Visualize
+    print('VISUALIZING TRANSLATION:', tx, ty, tz)
+    kanvas = np.ones((128,128,3)).astype('uint8')*255
+    pt0 = (64,64)
+    v_x = int(64 * tx / tAbs)
+    v_y = int(64 * ty / tAbs)
+    pt1 = (64 + v_x, 64 + v_y)
+    cv2.line(kanvas, pt0, pt1, (255, 0, 0), 2)
+    cv2.circle(kanvas, pt0, 5, (0,255,0), 2)
+    cv2.circle(kanvas, pt1, 5, (255,0,0), 2)
+    cv2.imshow('DIR', kanvas)
+    cv2.waitKey(10)
+
+    return np.float32([tx, ty, tz])
+
+
 def computePlaneNormal(kpsA, kpsB, mtx, trans_vector):
     # Intrinsic parameters
     fx = mtx[0, 0]
@@ -238,6 +350,7 @@ def rotateImagePlane(img, K, R):
     return cv2.normalize(tf_img, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)    
 
 
+
 def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
                 ransac_thresh=5,
                 filter_step=10,
@@ -300,7 +413,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         # COMPUTE TRANSLATION DIRECTLY
         ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
         R2 = np.identity(3)
-        translate = computeTranslationVector(ptsA, ptsB, mtx)
+        translate = computeTranslationVector2(ptsA, ptsB, mtx)
         # with open('trans_vector.csv', 'a') as fr:
         #     fr.write(';'.join([str(e) for e in translate]) + '\n')
 
@@ -416,7 +529,7 @@ if __name__ == "__main__":
                 max_iter = 35
                 cosine = 0.0
                 
-                while iteration < max_iter and cosine < 0.98 :   
+                while iteration < max_iter and cosine < 0.1 :   
 
                     print(f"------ITERATION # {iteration}--------")
                     print(f"Cosine figured =  {cosine}")
@@ -467,10 +580,10 @@ if __name__ == "__main__":
                 cv2.imshow('Recified frame', rec_show)
 
 
-                # Save normals to file
-                fname = f'normals_{FILE[:-4]}.csv'
-                with open(os.path.join(PATH, fname), 'a') as f:
-                    f.write(";".join([str(v.cur_frame_no)] + [str(a) for a in normal]) + '\n')
+                # # Save normals to file
+                # fname = f'normals_{FILE[:-4]}.csv'
+                # with open(os.path.join(PATH, fname), 'a') as f:
+                #     f.write(";".join([str(v.cur_frame_no)] + [str(a) for a in normal]) + '\n')
 
 
                 c_key = cv2.waitKey(1)
