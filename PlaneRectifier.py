@@ -420,7 +420,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
 
     except (TypeError, np.linalg.LinAlgError):
         # print('Failed to calculate essntial matrix')
-        return frame1, np.float32([0, 0, 0]), []
+        return frame1, np.float32([0, 0, 0]), ([], 0.0)
 
     # Calc abs motion
     abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
