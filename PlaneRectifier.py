@@ -18,8 +18,12 @@ from skimage import io, filters, transform
 import Sonarlab.Utils as ut
 import pandas as pd 
 import open3d as o3d
+from scipy.optimize import minimize
+import sys
 
 # Util functions
+
+
 
 def computeTranslationVector(kpsA, kpsB, mtx):
     """
@@ -105,83 +109,120 @@ def computeTranslationVector2(kpsA, kpsB, mtx):
 
     vec_sign = 0
 
+    # Iterative vanishing point
+    # N_SAMPLES = int(kpsA.shape[0] * 0.2)
+    # N_SAMPLES = 16 if N_SAMPLES < 16 else N_SAMPLES
+    N_SAMPLES = 64
+    N_ITER = 400
+    threshold = 40
+    candidate_tx = []
+    candidate_vp = []
 
-     # Matrix for vanihing point calc
-    equation_matrix = []
-    for X1, X2 in zip(kpsA, kpsB):
-        x1, y1, x2, y2 = [*X1, *X2]
-        x1 = x1 - cx
-        x2 = x2 - cx
-        y1 = y1 - cy
-        y2 = y2 - cy
+    for iter_index in range(N_ITER):
+        sys.stdout.write(f'\rIteration for trans vector search {iter_index}')
+        # Matrix for vanihing point calc
+        equation_matrix = []
 
-        # Count all vectors for y direcion for making sure motion is positive
-        vec_sign += y1 - y2
-
-        # Calculate coefficients for translation vector calc
-        # Params for VP
-        a = y2 - y1
-        b = x1 - x2
-        c = x2*y1 - x1*y2
-        equation_matrix.append([a, b, c])
-
-    # Calculate motion vector
-    # print("EQ MATRIX:", eq_motion_v_matrix)
-
-    equation_matrix = np.array(equation_matrix)
-    (u, d, v) = np.linalg.svd(equation_matrix)
-    v = v.transpose()
-    x = v[0,-1]
-    y = v[1,-1]
-    z = v[2,-1]
-    print( 'Vanishing point: ' + str([x,y,z]))
-    vanish_point = (int(x/z), int(y/z))
-    print(vanish_point)
-    sqr = np.sqrt(x*x + y*y + z*z)
-
-    # Estimate sign of T-vector
-    directions = []
-    x_dirs = []
-    y_dirs = []
-    for X1, X2 in zip(kpsA, kpsB):
-        x1, y1, x2, y2 = [*X1, *X2]
-        directions.append( (x2-x1)*(vanish_point[0] - x1) + (y2-y1)*(vanish_point[1] - x1) )
-        x_dirs.append(x2-x1)
-        y_dirs.append(y2-y1)
-        
-    x_sign = np.sign(np.average(x_dirs))
-    y_sign = np.sign(np.average(y_dirs))
-    z_sign = np.sign(np.average(directions))
-
-    print('SIGN OF X TRANSLATION =', x_sign)
-    print('SIGN OF Y TRANSLATION =', y_sign)
-    print('SIGN OF Z TRANSLATION =', z_sign)
+        # Generate random samples
+        new_pts0 = np.zeros((N_SAMPLES, 2))
+        new_pts1 = np.zeros((N_SAMPLES, 2))
+        sample_nums = []
+        for num in range(N_SAMPLES):
+            new_entry = np.random.randint(kpsA.shape[0])
+            if new_entry not in sample_nums:
+                sample_nums.append(new_entry)
+                new_pts0[num] = kpsA[new_entry]
+                new_pts1[num] = kpsB[new_entry]
 
 
-    # Calculate T-vector
-    tx = x/sqr
-    ty = y/sqr
-    tz=  z*f/sqr
+        for X1, X2 in zip(new_pts0, new_pts1):
+            x1, y1, x2, y2 = [*X1, *X2]
+            x1 = x1 - cx
+            x2 = x2 - cx
+            y1 = y1 - cy
+            y2 = y2 - cy
 
-    # Place right sign with respect to most component
-    if tz**2/(tx*tx + ty*ty) > 1:
-        # Replace with Z sign
-        if np.sign(tz) != z_sign:
-            tx = -tx
-            ty = -ty
-            tz = -tz
-    elif np.sign(tx) != x_sign:
-        # Replace with X sign
-        if np.sign(tx) * x_sign < 0:
-            tx = -tx
-            ty = -ty
-            tz = -tz
-    else:
-        # Replace with Y sign
-        if np.sign(ty) != y_sign:
-            tx = -tx
-            ty = -ty
-            tz = -tz  
+            # Count all vectors for y direcion for making sure motion is positive
+            vec_sign += y1 - y2
+
+            # Calculate coefficients for translation vector calc
+            # Params for VP
+            a = y2 - y1
+            b = x1 - x2
+            c = x2*y1 - x1*y2
+            equation_matrix.append([a, b, c])
+
+        # Calculate motion vector
+        # print("EQ MATRIX:", eq_motion_v_matrix)
+
+        equation_matrix = np.array(equation_matrix)
+        (u, d, v) = np.linalg.svd(equation_matrix)
+        v = v.transpose()
+        x = v[0,-1]
+        y = v[1,-1]
+        z = v[2,-1]
+        # print( 'Vanishing point: ' + str([x,y,z]))
+        vanish_point = (int(x/z), int(y/z))
+
+        sqr = np.sqrt(x*x + y*y + z*z)
+
+        # Estimate sign of T-vector
+        directions = []
+        x_dirs = []
+        y_dirs = []
+        for X1, X2 in zip(kpsA, kpsB):
+            x1, y1, x2, y2 = [*X1, *X2]
+            directions.append( (x2-x1)*(vanish_point[0] - x1) + (y2-y1)*(vanish_point[1] - x1) )
+            x_dirs.append(x2-x1)
+            y_dirs.append(y2-y1)
+            
+        x_sign = np.sign(np.average(x_dirs))
+        y_sign = np.sign(np.average(y_dirs))
+        z_sign = np.sign(np.average(directions))
+
+        # print('SIGN OF X TRANSLATION =', x_sign)
+        # print('SIGN OF Y TRANSLATION =', y_sign)
+        # print('SIGN OF Z TRANSLATION =', z_sign)
+
+
+        # Calculate T-vector
+        tx = x/sqr
+        ty = y/sqr
+        tz=  z*f/sqr
+
+        # Place right sign with respect to most component
+        if tz**2/(tx*tx + ty*ty) > 1:
+            # Replace with Z sign
+            if np.sign(tz) != z_sign:
+                tx = -tx
+                ty = -ty
+                tz = -tz
+        elif np.sign(tx) != x_sign:
+            # Replace with X sign
+            if np.sign(tx) * x_sign < 0:
+                tx = -tx
+                ty = -ty
+                tz = -tz
+        else:
+            # Replace with Y sign
+            if np.sign(ty) != y_sign:
+                tx = -tx
+                ty = -ty
+                tz = -tz  
+
+        candidate_tx.append((tx,ty,tz))
+        candidate_vp.append((int(x/z), int(y/z)))
+        plt.scatter([int(x/z)], [int(y/z)], s=6, color='green')
+        # print('Found vector', tx,ty,tz)
+
+    candidate_vp = np.array(candidate_vp)
+    candidate_tx = np.array(candidate_tx)   
+    tx = np.median(candidate_tx[:,0])
+    ty = np.median(candidate_tx[:,1])
+    tz = np.median(candidate_tx[:,2])
+
+    good_vp_x = np.median(candidate_vp[:,0])
+    good_vp_y = np.median(candidate_vp[:,1])
 
     tAbs = np.sqrt(tx*tx + ty*ty + tz*tz)
 
@@ -197,11 +238,17 @@ def computeTranslationVector2(kpsA, kpsB, mtx):
     cv2.circle(kanvas, pt1, 5, (255,0,0), 2)
     cv2.imshow('DIR', kanvas)
     cv2.waitKey(10)
+    X1 = kpsA[:,0]
+    Y1 = kpsA[:,1]
+    plt.scatter(X1,Y1, s=4, color='orange')
+    plt.scatter(good_vp_x, good_vp_y, s=20, color='red')
+    plt.show()
 
     return np.float32([tx, ty, tz])
 
 
 def computePlaneNormal(kpsA, kpsB, mtx, trans_vector):
+    print('Computing normal')
     # Intrinsic parameters
     fx = mtx[0, 0]
     fy = mtx[1, 1]
@@ -242,7 +289,11 @@ def computePlaneNormal(kpsA, kpsB, mtx, trans_vector):
     dd = v[-1,2] / v[-1,-1]
     cc = -1.0
 
-    return np.array([aa,bb,cc,dd])
+    x_res = minimize(minimizationFunc, [aa, bb, dd, TX, TY, TZ], (f, kpsA, kpsB))
+    an, bn, dn, tx, ty, tz = x_res.x
+
+    # return np.array([aa,bb,cc,dd])
+    return np.array([an,bn,cc,dn])
 
 
 def compute_essential_matrix(matches, status, kpsA, kpsB, intrinsic, method=cv2.FM_RANSAC, threshold=0.2, prob=0.6):
@@ -269,14 +320,13 @@ def compute_essential_matrix(matches, status, kpsA, kpsB, intrinsic, method=cv2.
             method=method,
             threshold = threshold,
             prob = prob
-#             threshold = 3
+
         )
 
     ptsA = [pts1[i] for i in range(len(pts1)) if inliers[i]]
     ptsB = [pts2[i] for i in range(len(pts2)) if inliers[i]]
     
     return essential_matrix, inliers, ptsA, ptsB
-
 
 
 def getGoodKps(kpsA, kpsB, matches, status):
@@ -292,6 +342,31 @@ def getGoodKps(kpsA, kpsB, matches, status):
             pts1.append(ptA)
             pts2.append(ptB)
     return np.array(pts1), np.array(pts2)
+
+
+def reprojectPoints(f, A, B, Z0, pts1, tx, ty, tz):
+    new_points = []
+    for x, y in pts1:
+        X = x*Z0 / (f - A*x - B*y)
+        Y = y*Z0 / (f - A*x - B*y)
+        Z = A*X + B*Y + Z0
+        new_points.append((f*(X-tx)/(Z-tz), f*(Y-ty)/(Z-tz)))
+    return np.array(new_points)
+
+
+def calcReprojectionError(pts1, pts2):
+    if pts1.shape!=pts2.shape:
+        raise IndexError('Dimensions must match')
+    sum_error = 0.0
+    for x0, y0, x1, y1 in np.hstack([pts1, pts2]):
+        sum_error += np.sqrt((x1-x0)**2 + (y1-y0)**2)
+    return sum_error / pts1.shape[0]
+
+
+def minimizationFunc(input_arr, f, pts1, pts2):
+    A,B,Z0, tx, ty, tz = input_arr
+    new_points = reprojectPoints(f,A,B,Z0,pts2,tx,ty,tz)
+    return calcReprojectionError(new_points, pts1)
 
 
 def rotMatrixFromNormal(a,b,c):
@@ -348,7 +423,6 @@ def rotateImagePlane(img, K, R):
     
     # return tf_img
     return cv2.normalize(tf_img, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)    
-
 
 
 def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
@@ -429,39 +503,40 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     # Build projection matricies and triangulate points
     ptsA = np.float32(ptsA)
     ptsB = np.float32(ptsB)
-    proj_mtx01 = np.zeros((3,4))
-    proj_mtx01[:3,:3] = np.identity(3)
-    proj_mtx01 = mtx @ proj_mtx01
+    # proj_mtx01 = np.zeros((3,4))
+    # proj_mtx01[:3,:3] = np.identity(3)
+    # proj_mtx01 = mtx @ proj_mtx01
 
-    proj_mtx02 = np.zeros((3,4))
-    proj_mtx02[:3,:3] = R2
-    proj_mtx02[:, -1] = translate.transpose()
-    proj_mtx02 = mtx @ proj_mtx02
+    # proj_mtx02 = np.zeros((3,4))
+    # proj_mtx02[:3,:3] = R2
+    # proj_mtx02[:, -1] = translate.transpose()
+    # proj_mtx02 = mtx @ proj_mtx02
 
-    points3d = cv2.triangulatePoints(proj_mtx01, proj_mtx02,
-                                    ptsA.transpose(),
-                                    ptsB.transpose())
+    # points3d = cv2.triangulatePoints(proj_mtx01, proj_mtx02,
+    #                                 ptsA.transpose(),
+    #                                 ptsB.transpose())
 
     
-    # Visualize point cloud
-    if show_point_cloud:
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(calib_points)
-        o3d.visualization.draw_geometries([pcd])
+    # # Visualize point cloud
+    # # if show_point_cloud:
+    # #     pcd = o3d.geometry.PointCloud()
+    # #     pcd.points = o3d.utility.Vector3dVector(calib_points)
+    # #     o3d.visualization.draw_geometries([pcd])
 
-    # Estimating plane for 3d points
-    calib_points = (points3d / points3d[-1, :]).transpose()
+    # # Estimating plane for 3d points
+    # calib_points = (points3d / points3d[-1, :]).transpose()
 
-    _, _, v = np.linalg.svd(calib_points)
-    v = v.transpose()
-    a, b, c, d = v[:, -1]
-    if c < 0:
-        a, b, c, d = [-element for element in (a,b,c,d)]
+    # _, _, v = np.linalg.svd(calib_points)
+    # v = v.transpose()
+    # a, b, c, d = v[:, -1]
+    # if c < 0:
+    #     a, b, c, d = [-element for element in (a,b,c,d)]
+    # nomal_abs = np.sqrt(a*a + b*b + c*c)
+
+    # print("Coefficients of the plane found: ", a,b,c,d)
+    # print('Another ones:', computePlaneNormal(ptsA, ptsB, mtx, translate))
+    a,b,c,d = computePlaneNormal(ptsA, ptsB, mtx, translate)
     nomal_abs = np.sqrt(a*a + b*b + c*c)
-
-    print("Coefficients of the plane found: ", a,b,c,d)
-    print('Another ones:', computePlaneNormal(ptsA, ptsB, mtx, translate))
-    # a,b,c,d = computePlaneNormal(ptsA, ptsB, mtx, translate)
 
     # Returnb only plane normal, if flag says
     if NORMALS_ONLY:
@@ -469,11 +544,11 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
 
     # Calcilate distances CALIB from points to plane
     distances = []
-    sqr = np.sqrt(a*a + b*b + c*c)
-    for pt in calib_points:
-        x, y, z, _ = pt
-        dist = (a*x + b*y + c*z + d) / sqr
-        distances.append(dist)
+    # sqr = np.sqrt(a*a + b*b + c*c)
+    # for pt in calib_points:
+    #     x, y, z, _ = pt
+    #     dist = (a*x + b*y + c*z + d) / sqr
+    #     distances.append(dist)
 
     # Rotate 1st imput frame
     rotation_mtx = rotMatrixFromNormal(a,b,c)
