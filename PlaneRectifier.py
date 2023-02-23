@@ -113,7 +113,7 @@ def computeTranslationVector2(kpsA, kpsB, mtx):
     # N_SAMPLES = int(kpsA.shape[0] * 0.2)
     # N_SAMPLES = 16 if N_SAMPLES < 16 else N_SAMPLES
     N_SAMPLES = 64
-    N_ITER = 400
+    N_ITER = 200
     threshold = 40
     candidate_tx = []
     candidate_vp = []
@@ -238,11 +238,14 @@ def computeTranslationVector2(kpsA, kpsB, mtx):
     cv2.circle(kanvas, pt1, 5, (255,0,0), 2)
     cv2.imshow('DIR', kanvas)
     cv2.waitKey(10)
-    X1 = kpsA[:,0]
-    Y1 = kpsA[:,1]
-    plt.scatter(X1,Y1, s=4, color='orange')
-    plt.scatter(good_vp_x, good_vp_y, s=20, color='red')
-    plt.show()
+
+    # X1 = kpsA[:,0]
+    # Y1 = kpsA[:,1]
+    # plt.scatter(X1,Y1, s=4, color='orange')
+    # plt.scatter(good_vp_x, good_vp_y, s=20, color='red')
+    # plt.show(block=False)
+    # plt.pause(1)
+    # plt.close()
 
     return np.float32([tx, ty, tz])
 
@@ -255,41 +258,67 @@ def computePlaneNormal(kpsA, kpsB, mtx, trans_vector):
     f = (fx+fy)/2
     cx = mtx[0, -1]
     cy = mtx[1, -1]
-    TX, TY, TZ = trans_vector
+    tx, ty, tz = trans_vector
 
     vec_sign = 0
 
+    N_SAMPLES = 64
+    N_ITER = 200
+    threshold = 40
+    candidate_normal = []
 
-     # Matrix for vanihing point calc
-    eq_matrix_pure_plane =  []
-    for X1, X2 in zip(kpsA, kpsB):
-        x0, y0, x1, y1 = [*X1, *X2]
+    for iter_index in range(N_ITER):
+        sys.stdout.write(f'\rIteration for normal estimation {iter_index}')
+        # Matrix for vanihing point calc
+        equation_matrix = []
 
-        A = f*TX*x0 - x1*x0*TZ
-        B = f*TX*y0 - x1*y0*TZ
-        C = f*x1 - f*x0
-        D = x1*TZ*f - f*f*TX
+        # Generate random samples
+        new_pts0 = np.zeros((N_SAMPLES, 2))
+        new_pts1 = np.zeros((N_SAMPLES, 2))
+        sample_nums = []
+        for num in range(N_SAMPLES):
+            new_entry = np.random.randint(kpsA.shape[0])
+            if new_entry not in sample_nums:
+                sample_nums.append(new_entry)
+                new_pts0[num] = kpsA[new_entry]
+                new_pts1[num] = kpsB[new_entry]
+        # Matrix for vanihing point calc
+        eq_matrix_pure_plane =  []
+        for X1, X2 in zip(new_pts0, new_pts1):
+            x0, y0, x1, y1 = [*X1, *X2]
 
-        A1 = f*TY*x0 - y1*x0*TZ
-        B1 = f*TY*y0 - y1*y0*TZ
-        C1 = f*y1 - f*y0
-        D1 = y1*TZ*f - f*f*TY
+            A0 = f*tx*x0 - x1*x0*tz
+            B0 = f*tx*y0 - x1*y0*tz
+            C0 = f*x1 - f*x0
+            D0 = x1*tz*f - f*f*tx
 
-        if all([A,B,C,D,A1,B1,C1,D1]) > 0.001:
-            eq_matrix_pure_plane.append([A,B,C,D])
-            eq_matrix_pure_plane.append([A1,B1,C1,D1])
+            A1 = f*ty*x0 - y1*x0*tz
+            B1 = f*ty*y0 - y1*y0*tz
+            C1 = f*y1 - f*y0
+            D1 = y1*tz*f - f*f*ty
 
-    eq_matrix_pure_plane = np.array(eq_matrix_pure_plane)
-    (u, d, v) = np.linalg.svd(eq_matrix_pure_plane)
-    v = v.transpose()
+            if all([A0,B0,C0,D0,A1,B1,C1,D1]):
+                eq_matrix_pure_plane.append([A0,B0,C0,D0])
+                eq_matrix_pure_plane.append([A1,B1,C1,D1])
 
-    # Plane coefs
-    aa = v[-1,0] / v[-1,-1]
-    bb = v[-1,1] / v[-1,-1]
-    dd = v[-1,2] / v[-1,-1]
-    cc = -1.0
+        eq_matrix_pure_plane = np.array(eq_matrix_pure_plane)
+        (u, d, v) = np.linalg.svd(eq_matrix_pure_plane)
+        v = v.transpose()
 
-    x_res = minimize(minimizationFunc, [aa, bb, dd, TX, TY, TZ], (f, kpsA, kpsB))
+        # Plane coefs
+        aa = v[-1,0] / v[-1,-1]
+        bb = v[-1,1] / v[-1,-1]
+        dd = v[-1,2] / v[-1,-1]
+        cc = -1.0
+        candidate_normal.append([aa,bb,cc,dd])
+
+    candidate_normal = np.array(candidate_normal)
+    aa = np.median(candidate_normal[:,0])
+    bb = np.median(candidate_normal[:,1])
+    cc = np.median(candidate_normal[:,2])
+    dd = np.median(candidate_normal[:,3])
+
+    x_res = minimize(minimizationFunc, [aa, bb, dd, tx, ty, tz], (f, kpsA, kpsB))
     an, bn, dn, tx, ty, tz = x_res.x
 
     # return np.array([aa,bb,cc,dd])
@@ -431,7 +460,8 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
                 crop=True,
                 show_point_cloud=False,
                 show_images = True,
-                NORMALS_ONLY=False):
+                NORMALS_ONLY=False,
+                MOTION_ONLY=False):
     """
     frame1 and frame2 are colored images of same size
     mtx and dst - are intrinsic matrix and distortion coefficients
@@ -482,11 +512,17 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         cv2.imshow('Matches', sh_f)
         cv2.waitKey(10)
 
+     # Calc abs motion
+    ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
+    abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
+    print('POINTS SHAPE:', ptsA.shape, 'ABS MOTION:', abs_motion)
+    if MOTION_ONLY:
+        return abs_motion
+
     # Computer essential matrix and recover R and T
     try:
 
         # COMPUTE TRANSLATION DIRECTLY
-        ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
         R2 = np.identity(3)
         translate = computeTranslationVector2(ptsA, ptsB, mtx)
         # with open('trans_vector.csv', 'a') as fr:
@@ -496,9 +532,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         # print('Failed to calculate essntial matrix')
         return frame1, np.float32([0, 0, 0]), ([], 0.0)
 
-    # Calc abs motion
-    abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
-    print('POINTS SHAPE:', ptsA.shape, 'ABS MOTION:', abs_motion)
+
 
     # Build projection matricies and triangulate points
     ptsA = np.float32(ptsA)
