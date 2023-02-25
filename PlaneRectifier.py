@@ -357,7 +357,8 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
                 crop=True,
                 show_point_cloud=False,
                 show_images = True,
-                NORMALS_ONLY=False):
+                NORMALS_ONLY=False,
+                MOTION_ONLY=False):
     """
     frame1 and frame2 are colored images of same size
     mtx and dst - are intrinsic matrix and distortion coefficients
@@ -408,11 +409,16 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         cv2.imshow('Matches', sh_f)
         cv2.waitKey(10)
 
+    ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
+    abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
+    print('POINTS SHAPE:', ptsA.shape, 'ABS MOTION:', abs_motion)
+    if MOTION_ONLY:
+        return abs_motion
     # Computer essential matrix and recover R and T
     try:
 
         # COMPUTE TRANSLATION DIRECTLY
-        ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
+        
         R2 = np.identity(3)
         translate = computeTranslationVector2(ptsA, ptsB, mtx)
         # with open('trans_vector.csv', 'a') as fr:
@@ -423,8 +429,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         return frame1, np.float32([0, 0, 0]), ([], 0.0)
 
     # Calc abs motion
-    abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
-    print('POINTS SHAPE:', ptsA.shape, 'ABS MOTION:', abs_motion)
+    
 
     # Build projection matricies and triangulate points
     ptsA = np.float32(ptsA)
