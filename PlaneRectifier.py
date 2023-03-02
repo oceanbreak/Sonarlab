@@ -465,7 +465,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     nomal_abs = np.sqrt(a*a + b*b + c*c)
 
     print("Coefficients of the plane found: ", a,b,c,d)
-    print('Another ones:', computePlaneNormal(ptsA, ptsB, mtx, translate))
+    # print('Another ones:', computePlaneNormal(ptsA, ptsB, mtx, translate))
     # a,b,c,d = computePlaneNormal(ptsA, ptsB, mtx, translate)
 
     # Returnb only plane normal, if flag says

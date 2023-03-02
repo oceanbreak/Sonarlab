@@ -103,7 +103,10 @@ def sliceImage(image, ptA, ptB):
 
 def detectKeypoints(image):
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    sift = cv2.xfeatures2d.SIFT_create()
+    try:
+        sift = cv2.xfeatures2d.SIFT_create()
+    except:
+        sift = cv2.ORB_create()
     kps, descript = sift.detectAndCompute(gray, None)
     kps = np.float32([kp.pt for kp in kps])
     return (kps, descript)
