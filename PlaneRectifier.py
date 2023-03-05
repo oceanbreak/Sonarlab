@@ -366,6 +366,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     """
     # Motion in frame array
     motion_in_frame = 0.0
+    distances = []
 
     # Resize input images if scalea-fractor is specified
     new_shape = (int(img1.shape[1] * SCALE_FACTOR), int(img1.shape[0] * SCALE_FACTOR))
@@ -397,6 +398,34 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     else:
         print('No good features found')
         return frame1, np.float32([0, 0, 0]), []
+        
+    ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
+    abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
+    print('POINTS SHAPE:', ptsA.shape, 'ABS MOTION:', abs_motion)
+    if MOTION_ONLY:
+        return abs_motion
+
+    num, rots_v, trans_v, norm_v = cv2.decomposeHomographyMat(H, mtx)
+    print('Attempting to decompose homography')
+    cosines = []
+    for normal in norm_v:
+        a,b,c = normal.reshape(-1)
+        print('CURRENT NORMAL:', a,b,c)
+        cosine = c / ((a**2 + b**2 + c **2) ** 0.5)
+        cosines.append(np.abs(cosine))
+        print('COSINE OF A PLANE', cosine)
+    index = cosines.index(max(cosines))
+    a1, b1, c1 = norm_v[index].reshape(-1)
+    print('COEFFS NORMAL FOUND:', a1, b1, c1)
+    print('COSINE GOOD', cosines[index])
+    if c1 < 0:
+        a1 = -a1
+        b1 = -b1
+        c1 = -c1
+    normala_abs = np.sqrt(a1*a1 + b1*b1 + c1*c1)
+    rotation_mtx = rotMatrixFromNormal(a1,b1,c1)
+    frame = undistortImage(img1, mtx_in, dst_in, crop=crop)
+    output = rotateImagePlane(frame, mtx_in, rotation_mtx)
 
     if show_images:
         sh_f = drawMatches(frame1, frame2, kps1, kps2, matches, status)
@@ -409,85 +438,8 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         cv2.imshow('Matches', sh_f)
         cv2.waitKey(10)
 
-    ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
-    abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
-    print('POINTS SHAPE:', ptsA.shape, 'ABS MOTION:', abs_motion)
-    if MOTION_ONLY:
-        return abs_motion
-    # Computer essential matrix and recover R and T
-    try:
 
-        # COMPUTE TRANSLATION DIRECTLY
-        
-        R2 = np.identity(3)
-        translate = computeTranslationVector2(ptsA, ptsB, mtx)
-        # with open('trans_vector.csv', 'a') as fr:
-        #     fr.write(';'.join([str(e) for e in translate]) + '\n')
-
-    except (TypeError, np.linalg.LinAlgError):
-        # print('Failed to calculate essntial matrix')
-        return frame1, np.float32([0, 0, 0]), ([], 0.0)
-
-    # Calc abs motion
-    
-
-    # Build projection matricies and triangulate points
-    ptsA = np.float32(ptsA)
-    ptsB = np.float32(ptsB)
-    proj_mtx01 = np.zeros((3,4))
-    proj_mtx01[:3,:3] = np.identity(3)
-    proj_mtx01 = mtx @ proj_mtx01
-
-    proj_mtx02 = np.zeros((3,4))
-    proj_mtx02[:3,:3] = R2
-    proj_mtx02[:, -1] = translate.transpose()
-    proj_mtx02 = mtx @ proj_mtx02
-
-    points3d = cv2.triangulatePoints(proj_mtx01, proj_mtx02,
-                                    ptsA.transpose(),
-                                    ptsB.transpose())
-
-    
-    # Visualize point cloud
-    if show_point_cloud:
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(calib_points)
-        o3d.visualization.draw_geometries([pcd])
-
-    # Estimating plane for 3d points
-    calib_points = (points3d / points3d[-1, :]).transpose()
-
-    _, _, v = np.linalg.svd(calib_points)
-    v = v.transpose()
-    a, b, c, d = v[:, -1]
-    if c < 0:
-        a, b, c, d = [-element for element in (a,b,c,d)]
-    nomal_abs = np.sqrt(a*a + b*b + c*c)
-
-    print("Coefficients of the plane found: ", a,b,c,d)
-    # print('Another ones:', computePlaneNormal(ptsA, ptsB, mtx, translate))
-    # a,b,c,d = computePlaneNormal(ptsA, ptsB, mtx, translate)
-
-    # Returnb only plane normal, if flag says
-    if NORMALS_ONLY:
-        return None, np.float32([a/nomal_abs, b/nomal_abs, c/nomal_abs]), []
-
-    # Calcilate distances CALIB from points to plane
-    distances = []
-    sqr = np.sqrt(a*a + b*b + c*c)
-    for pt in calib_points:
-        x, y, z, _ = pt
-        dist = (a*x + b*y + c*z + d) / sqr
-        distances.append(dist)
-
-    # Rotate 1st imput frame
-    rotation_mtx = rotMatrixFromNormal(a,b,c)
-    frame = undistortImage(img1, mtx_in, dst_in, crop=crop)
-    output = rotateImagePlane(frame, mtx_in, rotation_mtx)
-    print('Rotated image figured\n\n')
-    
-
-    return output, np.float32([a/nomal_abs, b/nomal_abs, c/nomal_abs]), (distances, abs_motion)
+    return output, np.float32([a1, b1, c1]), (distances, abs_motion)
 
 
 
@@ -543,7 +495,7 @@ if __name__ == "__main__":
                 cosine = 0.0
                 motion = 1
                 
-                while iteration < max_iter and motion < 35 :   
+                while iteration < max_iter and motion < 5 :   
 
                     print(f"------ITERATION # {iteration}--------")
                     print(f"Cosine figured =  {cosine}")
