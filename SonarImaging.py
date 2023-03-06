@@ -108,6 +108,7 @@ def detectKeypoints(image, template=None):
     except:
         sift = cv2.ORB_create()
     kps, descript = sift.detectAndCompute(gray, None)
+    kps = np.float32([kp.pt for kp in kps])
 
     if template is None:
         pass
@@ -116,8 +117,15 @@ def detectKeypoints(image, template=None):
         pass
     else:
         print('Applying template')
-
-    kps = np.float32([kp.pt for kp in kps])
+        new_kps = []
+        new_descriptors = []
+        for pt, descriptor in zip(kps, descript):
+            x, y = pt
+            if template[int(y),int(x),0] > 50:
+                new_kps.append(pt)
+                new_descriptors.append(descriptor)
+        kps = np.array(new_kps)
+        descript = np.array(new_descriptors)
     return (kps, descript)
 
 def matchKeypoints(des1, des2, ratio):
