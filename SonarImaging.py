@@ -392,18 +392,21 @@ class VideoPlayer:
         print(f'Scale {100.0 / self.scale_factor:3.2f} %')
 
 
-    def waitKeyHandle(self):
+    def waitKeyHandle(self, delay=0):
         """
         Handles waitKey event according to func_set dictionary
         """
-        c_key = cv2.waitKey()
+        c_key = cv2.waitKey(delay)
         if c_key & 0xFF == 27:
             self.playing = False
             # return None
-        idx = chr(c_key)
-        if idx in self.func_set.keys():
-            ret = self.func_set[idx]()
-            # return ret
+        try:
+            idx = chr(c_key)
+            if idx in self.func_set.keys():
+                ret = self.func_set[idx]()
+                # return ret
+        except ValueError:
+            pass
         return c_key
 
 
