@@ -5,20 +5,26 @@ from matplotlib import pyplot as plt
 import glob
 import os
 
-def estimateHistogram(img, show=(1,1,1,1), bins=64):
+def estimateHistogram(fig, ax, img, show=(1,1,1,1), bins=64):
+    ax.clear()
     b = img[:,:,0]
     g = img[:,:,1]
     r = img[:,:,2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     if show[0]:
-        plt.hist(b.reshape(-1), bins=bins, color='blue', histtype='step')
+        ax.hist(b.reshape(-1), bins=bins, color='blue', histtype='step')
     if show[1]:
-        plt.hist(g.reshape(-1), bins=bins, color='green', histtype='step')
+        ax.hist(g.reshape(-1), bins=bins, color='green', histtype='step')
     if show[2]:
-        plt.hist(r.reshape(-1), bins=bins, color='red', histtype='step')
+        ax.hist(r.reshape(-1), bins=bins, color='red', histtype='step')
     if show[3]:
-        plt.hist(gray.reshape(-1), bins=bins, color='black', histtype='step')
-    plt.show()
+        ax.hist(gray.reshape(-1), bins=bins, color='black', histtype='step')
+    fig.canvas.draw()
+    renderer = fig.canvas.renderer
+    ax.draw(renderer)
+
+
+
 
 ########################## HAZE ESTIMATION ##############################
 def getMinChannel(img):
@@ -64,50 +70,73 @@ def variance_of_laplacian(image):
 
 
 if __name__ == "__main__":
-    PATH = "D:\\DATA\\videomodule_different_conditions.mp4"
-    VP = VideoPlayer()
-    VP.openVideoFile(PATH)
-    VP.setScaleFactor(4)
-    VP.getNextFrame()
+    index = 1
+    PATH = "D:\\DATA"
+    video_files = glob.glob(os.path.join(PATH, "*.mp4"))
+    for video_file in video_files:
 
-    haze_index_arr = []
-    blur_index_arr = []
+        VP = VideoPlayer()
+        VP.openVideoFile(video_file)
+        VP.setFrameStep(5)
+        VP.setScaleFactor(4)
+        VP.getNextFrame()
 
-    while VP.playing:
-        VP.playStepForwards()
-        # VP.show()
-        print(f'FRAME {VP.cur_frame_no} OF {int(VP.vid_frame_length)}')
-        frame = VP.getCurrentFrame()[:-100, :, :]
-        frame = eqHist(frame)
+        haze_index_arr = []
+        blur_index_arr = []
 
-        # BLUR
-        blur_index = variance_of_laplacian(frame)
-        blur_index_arr.append(blur_index)
+        # Histogram figure
+        fig1,ax1 = plt.subplots(figsize=(6,3))
+        plt.show(block=False)  
 
-        # DCP
-        frame = cv2.resize(frame, (500,500))
-        cv2.imshow('Analyze_frame', frame)
-        dcp = getMinChannel(frame)
-        dcp = getDarkChannel(dcp, 55)
-        # cv2.imshow('DCP', dcp)
-        haze_index = hazeCoefficient(dcp, 13.7474657, 1.02377299, 3.63024834)
-        haze_index_arr.append(haze_index)
-        VP.waitKeyHandle(delay=10)
+        while VP.playing:
+            VP.playStepForwards()
+            # VP.show()
+            print(f'FRAME {VP.cur_frame_no} OF {int(VP.vid_frame_length)}')
+            frame = VP.getCurrentFrame()[:-100, :, :]
+            cv2.imshow('Raw frame', cv2.resize(frame, (640,480)))
+            frame = eqHist(frame)
 
-    fig,ax = plt.subplots()
-    ax2 = ax.twinx() 
-    ax.plot(haze_index_arr, color='royalblue', label='Haze')
-    ax2.plot(blur_index_arr, color='lightseagreen', label='Focus')
+            # BLUR
+            blur_index = variance_of_laplacian(frame)
+            blur_index_arr.append(blur_index)
 
-    ax.set_title('Image parameters')
-    ax.set_ylabel('Haze coefficient')
-    ax2.set_ylabel('Focus coefficient')
+            # DCP
+            frame = cv2.resize(frame, (640,480))
+            estimateHistogram(fig1, ax1, frame, (1,1,1,0), 256)
+            
+            cv2.imshow('Equalized frame', frame)
+            dcp = getMinChannel(frame)
+            dcp = getDarkChannel(dcp, 55)
+            # cv2.imshow('DCP', dcp)
+            haze_index = hazeCoefficient(dcp, 13.7474657, 1.02377299, 3.63024834)
+            haze_index_arr.append(haze_index)
+            VP.waitKeyHandle(delay=10)
 
-    ax.tick_params(axis='y', labelcolor='royalblue')
-    ax2.tick_params(axis='y', labelcolor='lightseagreen')
+        fig,ax = plt.subplots(figsize=(12,3))
+        temp = os.path.split(video_file)[-1]
+        temp = '.'.join(temp.split('.')[:-1])
+        output_name = f'{temp}_parameters.png'
+        output_name = os.path.join(PATH, output_name)
+        ax2 = ax.twinx() 
+        ax.plot(haze_index_arr, color='royalblue', label='Haze')
+        ax2.plot(blur_index_arr, color='lightseagreen', label='Focus')
 
-    ax.grid()
-    plt.show()
+        temp = '.'.join(temp.split('.')[:-1])
+        ax.set_title(f'Parameters of {temp} video')
+        ax.set_ylabel('Haze coefficient')
+        ax2.set_ylabel('Focus coefficient')
+
+        ax.tick_params(axis='y', labelcolor='royalblue')
+        ax2.tick_params(axis='y', labelcolor='lightseagreen')
+
+        ax.grid()
+
+        plt.savefig(output_name, dpi=300)
+        plt.show(block=False)
+
+        plt.pause(5)
+        plt.close('all')
+        index += 1
 
 
 
