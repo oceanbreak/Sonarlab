@@ -66,7 +66,10 @@ def variance_of_laplacian(image):
     lap = cv2.Laplacian(img, cv2.CV_64F).var()
     return lap
 
-
+########################## BRIGHTNESS ESTIMATION ##############################
+def estimateBrighntess(image):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return np.mean(gray)
 
 
 if __name__ == "__main__":
@@ -77,12 +80,13 @@ if __name__ == "__main__":
 
         VP = VideoPlayer()
         VP.openVideoFile(video_file)
-        VP.setFrameStep(5)
+        VP.setFrameStep(2)
         VP.setScaleFactor(4)
         VP.getNextFrame()
 
         haze_index_arr = []
         blur_index_arr = []
+        brightness_arr = []
 
         # Histogram figure
         fig1,ax1 = plt.subplots(figsize=(6,3))
@@ -105,29 +109,41 @@ if __name__ == "__main__":
             estimateHistogram(fig1, ax1, frame, (1,1,1,0), 256)
             
             cv2.imshow('Equalized frame', frame)
+
             dcp = getMinChannel(frame)
             dcp = getDarkChannel(dcp, 55)
             # cv2.imshow('DCP', dcp)
             haze_index = hazeCoefficient(dcp, 13.7474657, 1.02377299, 3.63024834)
             haze_index_arr.append(haze_index)
+
+            brightness = estimateBrighntess(frame)
+            brightness_arr.append(brightness)
+
             VP.waitKeyHandle(delay=10)
 
         fig,ax = plt.subplots(figsize=(12,3))
+
         temp = os.path.split(video_file)[-1]
         temp = '.'.join(temp.split('.')[:-1])
         output_name = f'{temp}_parameters.png'
         output_name = os.path.join(PATH, output_name)
         ax2 = ax.twinx() 
+        ax3 = ax.twinx()
+        ax3.spines['right'].set_position(("axes", 1.07))
+
         ax.plot(haze_index_arr, color='royalblue', label='Haze')
         ax2.plot(blur_index_arr, color='lightseagreen', label='Focus')
+        ax3.plot(brightness_arr, color='blueviolet', label='Brightness')
 
         temp = '.'.join(temp.split('.')[:-1])
         ax.set_title(f'Parameters of {temp} video')
         ax.set_ylabel('Haze coefficient')
         ax2.set_ylabel('Focus coefficient')
+        ax3.set_ylabel('Brightness coefficient')
 
         ax.tick_params(axis='y', labelcolor='royalblue')
         ax2.tick_params(axis='y', labelcolor='lightseagreen')
+        ax3.tick_params(axis='y', labelcolor='blueviolet')
 
         ax.grid()
 
