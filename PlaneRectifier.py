@@ -414,14 +414,19 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         return abs_motion
 
     num, rots_v, trans_v, norm_v = cv2.decomposeHomographyMat(H, mtx)
-    print('Attempting to decompose homography')
+    tx, ty, tz = computeTranslationVector2(ptsA, ptsB, mtx)
+    # print('CLASSICAL CALCULATION OF TRANS VECTOR', *computeTranslationVector2(ptsA, ptsB, mtx))
     cosines = []
-    for normal in norm_v:
-        a,b,c = normal.reshape(-1)
-        print('CURRENT NORMAL:', a,b,c)
-        cosine = c / ((a**2 + b**2 + c **2) ** 0.5)
+    for normal, trans, rot in zip(norm_v, trans_v, rots_v):
+        a,b,c = trans.reshape(-1)
+        # print('CURRENT NORMAL:', a,b,c)
+        print('TRANS VECTOR:', *trans.reshape(-1))
+        # cosine = c / ((a**2 + b**2 + c **2) ** 0.5)
+        tgood_abs = np.sqrt(tx*tx + ty*ty + tz*tz)
+        t_abs = np.sqrt(a**2 + b**2 + c **2)
+        cosine = (tx*a + ty*b + tz*c) / (t_abs * tgood_abs)
         cosines.append(np.abs(cosine))
-        print('COSINE OF A PLANE', cosine)
+        # print('COSINE OF A PLANE', cosine)
     index = cosines.index(max(cosines))
     a1, b1, c1 = norm_v[index].reshape(-1)
     print('COEFFS NORMAL FOUND:', a1, b1, c1)
