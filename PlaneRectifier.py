@@ -358,7 +358,8 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
                 show_point_cloud=False,
                 show_images = True,
                 NORMALS_ONLY=False,
-                MOTION_ONLY=False):
+                MOTION_ONLY=False,
+                template=None):
     """
     frame1 and frame2 are colored images of same size
     mtx and dst - are intrinsic matrix and distortion coefficients
@@ -384,21 +385,28 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     frame2 = eqHist(frame2)
 
     h,w  = frame1.shape[:2]
+
+    if template is not None:
+        template = undistortImage(template, mtx_in, dst_in, False)
+        template = cv2.resize(template, new_shape)
     
 
     # Detect featers and estimate inliers
-    kps1, ds1 = detectKeypoints(frame1)
-    kps2, ds2 = detectKeypoints(frame2)
+    kps1, ds1 = detectKeypoints(frame1, template=template)
+    kps2, ds2 = detectKeypoints(frame2, template=template)
 
     matcher = matchKeypoints(ds1, ds2, lo_ratio)
     ret = estimateInliers(matcher, kps1, kps2, ransac_thresh)
     if ret is not None:
         matches, H, status = ret
+        print(f'{len(matches)} matches found')
+        if len(matches) < 8:
+            print('Not enough matches to process')
+            return None
         # print(f'{len(matches)} matches found')
     else:
         print('No good features found')
         return frame1, np.float32([0, 0, 0]), []
-        
     ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
     abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
     print('POINTS SHAPE:', ptsA.shape, 'ABS MOTION:', abs_motion)
@@ -436,12 +444,9 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         cv2.imshow("WARP",shifted_frame)
         cv2.waitKey(1000)
         cv2.imshow('Matches', sh_f)
-        cv2.waitKey(10)
-
-
+        cv2.waitKey(10) 
+ 
     return output, np.float32([a1, b1, c1]), (distances, abs_motion)
-
-
 
 if __name__ == "__main__":
 

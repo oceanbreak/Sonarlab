@@ -101,7 +101,7 @@ def sliceImage(image, ptA, ptB):
 
 ############# Detection and descriptpors section #################
 
-def detectKeypoints(image):
+def detectKeypoints(image, template=None):
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     try:
         sift = cv2.xfeatures2d.SIFT_create()
@@ -109,6 +109,23 @@ def detectKeypoints(image):
         sift = cv2.ORB_create()
     kps, descript = sift.detectAndCompute(gray, None)
     kps = np.float32([kp.pt for kp in kps])
+
+    if template is None:
+        pass
+    elif template.shape[:2] != image.shape[:2]:
+        print('Dimensions of image and template dont match')
+        pass
+    else:
+        print('Applying template')
+        new_kps = []
+        new_descriptors = []
+        for pt, descriptor in zip(kps, descript):
+            x, y = pt
+            if template[int(y),int(x),0] > 50:
+                new_kps.append(pt)
+                new_descriptors.append(descriptor)
+        kps = np.array(new_kps)
+        descript = np.array(new_descriptors)
     return (kps, descript)
 
 def matchKeypoints(des1, des2, ratio):
