@@ -18,6 +18,7 @@ from skimage import io, filters, transform
 import Sonarlab.Utils as ut
 import pandas as pd 
 import open3d as o3d
+import time
 
 # Util functions
 
@@ -365,6 +366,8 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     mtx and dst - are intrinsic matrix and distortion coefficients
     SCALE_FACTOR is a multipliter for image size
     """
+    t_begin = time.perf_counter()
+
     # Motion in frame array
     motion_in_frame = 0.0
     distances = []
@@ -406,31 +409,50 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         # print(f'{len(matches)} matches found')
     else:
         print('No good features found')
-        return frame1, np.float32([0, 0, 0]), []
+        return None
     ptsA, ptsB = getGoodKps(kps1, kps2, matches, status)
-    abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
+    try:
+        abs_motion = np.average(np.linalg.norm(ptsB - ptsA, axis=1))
+    except BaseException:
+        abs_motion = 0.0
     print('POINTS SHAPE:', ptsA.shape, 'ABS MOTION:', abs_motion)
     if MOTION_ONLY:
         return abs_motion
 
+    t0 = time.perf_counter()
     num, rots_v, trans_v, norm_v = cv2.decomposeHomographyMat(H, mtx)
+    t1 = time.perf_counter()
+
     tx, ty, tz = computeTranslationVector2(ptsA, ptsB, mtx)
+    t2 = time.perf_counter()
+    tgood_abs = np.sqrt(tx*tx + ty*ty + tz*tz)
     # print('CLASSICAL CALCULATION OF TRANS VECTOR', *computeTranslationVector2(ptsA, ptsB, mtx))
+    cosine = 0.0
     cosines = []
     for normal, trans, rot in zip(norm_v, trans_v, rots_v):
         a,b,c = trans.reshape(-1)
         # print('CURRENT NORMAL:', a,b,c)
         print('TRANS VECTOR:', *trans.reshape(-1))
         # cosine = c / ((a**2 + b**2 + c **2) ** 0.5)
-        tgood_abs = np.sqrt(tx*tx + ty*ty + tz*tz)
         t_abs = np.sqrt(a**2 + b**2 + c **2)
         cosine = (tx*a + ty*b + tz*c) / (t_abs * tgood_abs)
+        # if cosine > 0.95:
+        #     break
+        print(f'COSINE BTW 2 VECTORS = {cosine}')
         cosines.append(np.abs(cosine))
         # print('COSINE OF A PLANE', cosine)
+    t3 = time.perf_counter()
     index = cosines.index(max(cosines))
     a1, b1, c1 = norm_v[index].reshape(-1)
     print('COEFFS NORMAL FOUND:', a1, b1, c1)
     print('COSINE GOOD', cosines[index])
+    # if cosine > 0.95:
+    #     a1, b1, c1 = normal.reshape(-1)
+    # else:
+    #     print('Normal not found')
+    #     return frame1, np.float32([0, 0, 0]), []
+
+
     if c1 < 0:
         a1 = -a1
         b1 = -b1
@@ -450,7 +472,13 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         cv2.waitKey(1000)
         cv2.imshow('Matches', sh_f)
         cv2.waitKey(10) 
- 
+
+    print()
+    print('Decompose homography:', t1-t0)
+    print('computeTranslationVector2', t2-t1)
+    print('Loop', t3-t2)
+    t_end = time.perf_counter()
+    print('Total func time', t_end - t_begin)
     return output, np.float32([a1, b1, c1]), (distances, abs_motion)
 
 if __name__ == "__main__":
