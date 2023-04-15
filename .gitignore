@@ -2,4 +2,6 @@ __pycache__/
 1
 2
 *.npy
+venv
+.idea
 *.csv
