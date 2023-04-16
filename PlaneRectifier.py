@@ -420,32 +420,56 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         return abs_motion
 
     t0 = time.perf_counter()
-    num, rots_v, trans_v, norm_v = cv2.decomposeHomographyMat(H, mtx)
-    t1 = time.perf_counter()
+    nums, rots_v, trans_v, norm_v = cv2.decomposeHomographyMat(H, mtx)
+    # t1 = time.perf_counter()
 
-    tx, ty, tz = computeTranslationVector2(ptsA, ptsB, mtx)
-    t2 = time.perf_counter()
-    tgood_abs = np.sqrt(tx*tx + ty*ty + tz*tz)
+    # tx, ty, tz = computeTranslationVector2(ptsA, ptsB, mtx)
+    # t2 = time.perf_counter()
+    # tgood_abs = np.sqrt(tx*tx + ty*ty + tz*tz)
     # print('CLASSICAL CALCULATION OF TRANS VECTOR', *computeTranslationVector2(ptsA, ptsB, mtx))
-    cosine = 0.0
-    cosines = []
-    for normal, trans, rot in zip(norm_v, trans_v, rots_v):
+    # cosine = 0.0
+    # cosines = []
+    cheirality_pts = []
+    for num, normal, trans, rot in zip(range(nums), norm_v, trans_v, rots_v):
+        print(f'Working on {num} condition')
         a,b,c = trans.reshape(-1)
         # print('CURRENT NORMAL:', a,b,c)
-        print('TRANS VECTOR:', *trans.reshape(-1))
+        # print('TRANS VECTOR:', *trans.reshape(-1))
         # cosine = c / ((a**2 + b**2 + c **2) ** 0.5)
         t_abs = np.sqrt(a**2 + b**2 + c **2)
-        cosine = (tx*a + ty*b + tz*c) / (t_abs * tgood_abs)
+
         # if cosine > 0.95:
         #     break
-        print(f'COSINE BTW 2 VECTORS = {cosine}')
-        cosines.append(np.abs(cosine))
+
+        # Test on cheirality
+        proj_mtx01 = np.zeros((3,4))
+        proj_mtx01[:3,:3] = np.identity(3)
+        proj_mtx01 = mtx @ proj_mtx01
+
+        proj_mtx02 = np.zeros((3,4))
+        proj_mtx02[:3,:3] = rot
+        proj_mtx02[:, -1] = trans.transpose()
+        proj_mtx02 = mtx @ proj_mtx02
+        points3d = cv2.triangulatePoints(proj_mtx01, proj_mtx02,
+                                        ptsA.transpose(),
+                                        ptsB.transpose())
+        calib_points = (points3d / points3d[-1, :]).transpose()[:,:-1]
+        cheirality_pts_count = 0
+        for pt3d in calib_points:
+            if np.dot(rot[:,-1], pt3d) > 0:
+                cheirality_pts_count += 1
+        cheirality_pts.append(cheirality_pts_count)
+
+    print('CHERAILITY POINTS NUMBERS: ', cheirality_pts)
+
+
         # print('COSINE OF A PLANE', cosine)
-    t3 = time.perf_counter()
-    index = cosines.index(max(cosines))
+    index =cheirality_pts.index(max(cheirality_pts))
+    print(f'INDEX of MAX chairality: {index}, value = {cheirality_pts[index]}')
+
     a1, b1, c1 = norm_v[index].reshape(-1)
     print('COEFFS NORMAL FOUND:', a1, b1, c1)
-    print('COSINE GOOD', cosines[index])
+
     # if cosine > 0.95:
     #     a1, b1, c1 = normal.reshape(-1)
     # else:
@@ -473,12 +497,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         cv2.imshow('Matches', sh_f)
         cv2.waitKey(10) 
 
-    print()
-    print('Decompose homography:', t1-t0)
-    print('computeTranslationVector2', t2-t1)
-    print('Loop', t3-t2)
-    t_end = time.perf_counter()
-    print('Total func time', t_end - t_begin)
+
     return output, np.float32([a1, b1, c1]), (distances, abs_motion)
 
 if __name__ == "__main__":
