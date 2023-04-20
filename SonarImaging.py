@@ -174,6 +174,29 @@ def drawMatches(imageA, imageB, kpsA, kpsB, matches, status):
     # return the visualization
     return vis
 
+
+def calcOpticalFlow(imageA, imageB, step=10, coef_line = 10):
+    prvs = cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY)
+    nxt = cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY)
+
+    # Calculate optical flow
+    window = 200
+    flow = cv2.calcOpticalFlowFarneback(prvs, nxt, None, 0.5, 3, window, 3, 5, 1.2, 0)
+    mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+
+    
+    kanvas = np.ones(imageA.shape).astype('uint8')*255
+
+    for i in range(0, imageA.shape[0], step):
+        for j in range(0, imageA.shape[1], step):
+            y1, x1 = i, j
+            y2 = coef_line*mag[i,j] * np.sin(ang[i,j]) + i
+            x2 = coef_line*mag[i,j] * np.cos(ang[i,j]) + j
+            cv2.line(kanvas, (x1, y1), (int(x2), int(y2)), (0, 0, 255), 1)
+    
+    cv2.imshow('Optical flow vectors', kanvas)
+    return mag, ang
+
 ####################################################
 
 ### CLASSES ###
