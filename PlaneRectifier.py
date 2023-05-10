@@ -500,7 +500,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     print('Rotated image figured\n\n')
     
 
-    return output, np.float32([a/nomal_abs, b/nomal_abs, c/nomal_abs]), (distances, abs_motion)
+    return output, np.float32([a/nomal_abs, b/nomal_abs, c/nomal_abs]), (distances, abs_motion, points3d)
 
 
 
