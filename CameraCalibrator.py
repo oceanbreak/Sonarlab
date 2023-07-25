@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import glob
 import os
-from SonarImaging import eqHist
+from Sonarlab.SonarImaging import eqHist
 
 #### Module that provides tools for camera calibration ######
 
