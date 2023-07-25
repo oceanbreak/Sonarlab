@@ -92,7 +92,7 @@ class CameraCalibrator:
         cv2.waitKey()
 
         dist_large = dist
-        mtx_large = mtx * self.__scale_factor
+        mtx_large = mtx // self.__scale_factor
         mtx_large[-1, -1] = 1.0
 
         np.save(self.__output_path + 'mtx.npy', mtx_large)
@@ -101,7 +101,7 @@ class CameraCalibrator:
 
 
         print('Handling full sized image')
-        img = cv2.imread(glob.glob('data/calibrate/BD3570/*.JPG')[8])
+        img = cv2.imread(self.__img_list[0])
         h,  w = img.shape[:2]
         newcameramtx_large, roi=cv2.getOptimalNewCameraMatrix(mtx_large,dist_large,(w,h),1,(w,h))
         dst = cv2.undistort(img, mtx_large, dist_large, None, newcameramtx_large)
