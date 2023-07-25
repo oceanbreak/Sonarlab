@@ -13,7 +13,7 @@ class CameraCalibrator:
         self.__scale_factor = 0.5
         self.__criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
         self.__img_list = images_names
-        self.__output_path = ''
+        self.__output_path = os.path.split(images_names[0])[0]
 
         # Chessboard shape
         self.__grid_shape = grid_shape
@@ -72,7 +72,8 @@ class CameraCalibrator:
 
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1],None,None)
 
-        img = cv2.imread(glob.glob('data/calibrate/BD3570/*.JPG')[8])
+        # Test Calibration
+        img = cv2.imread(self.__img_list[0])
         img = cv2.resize(img, (int(img.shape[1] * self.__scale_factor), 
                                int(img.shape[0] * self.__scale_factor)))
 
@@ -94,8 +95,8 @@ class CameraCalibrator:
         mtx_large = mtx * self.__scale_factor
         mtx_large[-1, -1] = 1.0
 
-        np.save('BD3570_mtx.npy', mtx_large)
-        np.save('BD3570_dst.npy', dist_large)
+        np.save(self.__output_path + 'mtx.npy', mtx_large)
+        np.save(self.__output_path + 'dst.npy', dist_large)
         print('Saved')
 
 
