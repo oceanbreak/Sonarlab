@@ -580,6 +580,7 @@ if __name__ == "__main__":
                     # # cv2.imshow('frame2', sh_f2)
 
                     rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.2, filter_step=1,
+                    crop=False,
                     lo_ratio=0.7,
                     ransac_thresh=3,
                     show_images=False)
@@ -605,6 +606,7 @@ if __name__ == "__main__":
                     normals.append(prev_normal)
                     normal = prev_normal
 
+                cv2.imwrite(f'2/{FILE}_Rectified_{v.cur_frame_no}.jpg', rectified)
                 rec_show = cv2.resize(rectified, new_shape)
                 cv2.imshow('Recified frame', rec_show)
 
