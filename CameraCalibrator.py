@@ -1,6 +1,5 @@
 import numpy as np
 import cv2
-import glob
 import os
 from Sonarlab.SonarImaging import eqHist
 
@@ -50,7 +49,11 @@ class CameraCalibrator:
             gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
 
             # Find the chess board corners
-            ret, corners = cv2.findChessboardCorners(gray, self.__grid_shape, None)
+            ret, corners = cv2.findChessboardCorners(img, self.__grid_shape, None)
+
+            # cv2.imshow('gray',gray)
+            # cv2.waitKey(10)
+            
 
             # If found, add object points, image points (after refining them)
             if ret == True:
@@ -61,9 +64,11 @@ class CameraCalibrator:
 
                 # Draw and display the corners
                 img = cv2.drawChessboardCorners(img, self.__grid_shape, corners2, ret)
-                im_show = cv2.resize(img, (960, 740))
+                im_show = img
                 cv2.imshow('img',im_show)
                 cv2.waitKey(500)
+            else:
+                print('No corners found')
 
         cv2.destroyAllWindows()
 
@@ -113,3 +118,20 @@ class CameraCalibrator:
         cv2.imshow('Undistorted', dst_show)
         cv2.waitKey()
 
+
+if __name__ == '__main__':
+
+    from tkinter.filedialog import askdirectory
+    import glob
+
+    path = askdirectory()
+    image_list = glob.glob(path + '/*.jpg') + glob.glob(path + '/*.png')
+    print(image_list)
+
+    grid_size = tuple([int(x) for x in input('Enter grid size (spacebar separation)').split(' ')])
+    print(f'Selected grid size: {grid_size}')
+    scale_factor = float(input('Enter scale factor from 0.1 to 1.0:\n'))
+    
+    calibrator = CameraCalibrator(image_list, grid_size)
+    calibrator.setScaleFractor(scale_factor)
+    calibrator.calibrate()
