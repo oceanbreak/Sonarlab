@@ -370,7 +370,10 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
 
     # Resize input images if scalea-fractor is specified
     new_shape = (int(img1.shape[1] * SCALE_FACTOR), int(img1.shape[0] * SCALE_FACTOR))
-    mtx = mtx_in * SCALE_FACTOR
+    w = img1.shape[1]
+    h = img1.shape[0]
+    newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx_in, dst_in, (w, h), 1, (w, h))
+    mtx = newcameramtx * SCALE_FACTOR
     mtx[-1,-1] = 1.0
 
 
