@@ -350,11 +350,55 @@ def rotateImagePlane(img, K, R):
     return cv2.normalize(tf_img, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)    
 
 
+def rotateImagePlane3(img, K, R):
+    """
+    Rotation of image plane based on:
+    1) Reprojecting image to a tilted plane with known normals (from R)
+    2) Rotating tilted plane back to inverse of R
+    3) Projecting point on new image
+    """
+
+    a, b, c = np.linalg.inv(R) @ np.array([0, 0, 1])
+    a = a/c
+    b = b/c
+
+
+    f = (K[0,0] + K[1,1])/2
+    cx = K[0,-1]
+    cy = K[1,-1]
+    K_augm = np.linalg.inv(K) * f
+
+    K_augm = np.vstack((K_augm, np.array([-a, -b, f + a*cx + b*cy])))
+
+
+    Rot = np.identity(4)
+    Rot[:-1, :-1] = np.linalg.inv(R)
+
+    T1 = np.identity(4)
+    T1[2, -1] = -1.0
+
+    T2 = np.identity(4)
+    T2[2, -1] = 1.0
+    
+    # Load intrinsic and invert it
+    K_inv = np.zeros((3,4))
+    K_inv[:,:-1] = K
+
+    matrix = K_inv @ T2  @ Rot @ T1 @  K_augm
+
+    print('Result matrix ROT-3:', matrix)
+
+    # Rotate image
+    tf_img = cv2.warpPerspective(img, matrix, (img.shape[1], img.shape[0]))
+    
+    # return tf_img
+    return cv2.normalize(tf_img, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)   
+
 
 def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
                 ransac_thresh=5,
                 filter_step=10,
-                crop=True,
+                crop=False,
                 show_point_cloud=False,
                 show_images = True,
                 NORMALS_ONLY=False,
@@ -499,7 +543,7 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
     # Rotate 1st imput frame
     rotation_mtx = rotMatrixFromNormal(a,b,c)
     frame = undistortImage(img1, mtx_in, dst_in, crop=crop)
-    output = rotateImagePlane(frame, mtx_in, rotation_mtx)
+    output = rotateImagePlane3(frame, mtx_in, rotation_mtx)
     print('Rotated image figured\n\n')
     
 
