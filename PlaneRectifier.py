@@ -90,7 +90,7 @@ def computeTranslationVector(kpsA, kpsB, mtx):
     return np.float32([tx, ty, tz])
 
 
-def computeTranslationVector2(kpsA, kpsB, mtx):
+def computeTranslationVector2(kpsA, kpsB, mtx, img):
     """
     Calculation of translation vetor of camera between two images,
     assuming camera tranlsates only, not rotates
@@ -139,6 +139,15 @@ def computeTranslationVector2(kpsA, kpsB, mtx):
     print(vanish_point)
     sqr = np.sqrt(x*x + y*y + z*z)
 
+    # Visualize
+    for ptA, ptB in zip(kpsA, kpsB):
+        x1, y1 = int(ptA[0]), int(ptA[1])
+        x2, y2 = int(ptB[0]), int(ptB[1])
+        cv2.line(img, (x1, y1), (x2, y2), (0,255,0), 1)
+    drawPoints(img, (vanish_point[0] + cx, vanish_point[1] + cy))
+    cv2.imshow('FE', img)
+    cv2.waitKey(10)
+
     # Estimate sign of T-vector
     directions = []
     x_dirs = []
@@ -164,24 +173,24 @@ def computeTranslationVector2(kpsA, kpsB, mtx):
     tz=  z*f/sqr
 
     # Place right sign with respect to most component
-    if tz**2/(tx*tx + ty*ty) > 1:
-        # Replace with Z sign
-        if np.sign(tz) != z_sign:
-            tx = -tx
-            ty = -ty
-            tz = -tz
-    elif np.sign(tx) != x_sign:
-        # Replace with X sign
-        if np.sign(tx) * x_sign < 0:
-            tx = -tx
-            ty = -ty
-            tz = -tz
-    else:
-        # Replace with Y sign
-        if np.sign(ty) != y_sign:
-            tx = -tx
-            ty = -ty
-            tz = -tz  
+    # if tz**2/(tx*tx + ty*ty) > 1:
+    #     # Replace with Z sign
+    #     if np.sign(tz) != z_sign:
+    #         tx = -tx
+    #         ty = -ty
+    #         tz = -tz
+    # elif np.sign(tx) != x_sign:
+    #     # Replace with X sign
+    #     if np.sign(tx) * x_sign < 0:
+    #         tx = -tx
+    #         ty = -ty
+    #         tz = -tz
+    # else:
+    #     # Replace with Y sign
+    #     if np.sign(ty) != y_sign:
+    #         tx = -tx
+    #         ty = -ty
+    #         tz = -tz  
 
     tAbs = np.sqrt(tx*tx + ty*ty + tz*tz)
 
@@ -480,11 +489,11 @@ def RectfyImage(img1, img2, mtx_in, dst_in, SCALE_FACTOR=1.0, lo_ratio=0.5,
         # COMPUTE TRANSLATION DIRECTLY
         
         R2 = np.identity(3)
-        translate = computeTranslationVector2(ptsA, ptsB, mtx)
+        translate = computeTranslationVector2(ptsA, ptsB, mtx, frame1)
         # with open('trans_vector.csv', 'a') as fr:
         #     fr.write(';'.join([str(e) for e in translate]) + '\n')
 
-    except (TypeError, np.linalg.LinAlgError):
+    except (np.linalg.LinAlgError):
         # print('Failed to calculate essntial matrix')
         return frame1, np.float32([0, 0, 0]), ([], 0.0)
 
@@ -579,7 +588,7 @@ if __name__ == "__main__":
         v.getNextFrame()
 
         # Set how many frames to skip
-        v.setFrameStep(5)
+        v.setFrameStep(2)
 
         frame_count = 0
         while v.playing:
@@ -596,10 +605,10 @@ if __name__ == "__main__":
                 c_key = 0
                 normals = []
                 motions = []
-                iteration = 10
-                iteration_step = 5
+                iteration = 2
+                iteration_step = 1
                 rec_step=2
-                max_iter = 50
+                max_iter = 10
                 cosine = 0.0
                 motion = 1
                 
