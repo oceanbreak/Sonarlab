@@ -143,8 +143,8 @@ def computeTranslationVector2(kpsA, kpsB, mtx, img):
     for ptA, ptB in zip(kpsA, kpsB):
         x1, y1 = int(ptA[0]), int(ptA[1])
         x2, y2 = int(ptB[0]), int(ptB[1])
-        cv2.line(img, (x1, y1), (x2, y2), (0,255,0), 1)
-    drawPoints(img, (vanish_point[0] + cx, vanish_point[1] + cy))
+        cv2.line(img, (x1, y1), (x2, y2), (255,255,0), 1)
+    drawPoints(img, (vanish_point[0] + cx, vanish_point[1] + cy), radius=7)
     cv2.imshow('FE', img)
     cv2.waitKey(10)
 
