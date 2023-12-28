@@ -208,7 +208,7 @@ class VideoPlayer:
         self.vid_frame_length = 0
         self.cur_frame_no = 0
         self.fps = 0
-        self.scale_factor = 1
+        self.scale_factor = 1.0
         self.current_frame = None
 
         #### FLAGS #####
@@ -304,7 +304,8 @@ class VideoPlayer:
         Returns a scaled version of current frame
         """
         cur_frame = self.current_frame
-        new_size = (cur_frame.shape[1] // self.scale_factor, cur_frame.shape[0] // self.scale_factor)
+        new_size = (int(cur_frame.shape[1] * self.scale_factor), 
+                    int(cur_frame.shape[0] * self.scale_factor))
         return cv2.resize(cur_frame, new_size)
 
 
@@ -383,13 +384,13 @@ class VideoPlayer:
 
 
     def scaleUp(self):
-        self.scale_factor += 1
-        print(f'Scale {100 / self.scale_factor:3.2f}%')
+        self.scale_factor += 0.05
+        print(f'Scale {100 * self.scale_factor:3.2f}%')
 
 
     def scaleDown(self):
-        self.scale_factor = self.scale_factor - 1 if self.scale_factor > 1 else  self.scale_factor
-        print(f'Scale {100.0 / self.scale_factor:3.2f} %')
+        self.scale_factor = self.scale_factor - 0.05 if self.scale_factor > 0.1 else  self.scale_factor
+        print(f'Scale {100.0 * self.scale_factor:3.2f} %')
 
 
     def waitKeyHandle(self):
@@ -421,7 +422,7 @@ class VideoPlayer:
 
 if __name__ == "__main__":
 
-    video_path =  'D:\DATA\Videomodule video samples/R_20221002_001808_20221002_002206.avi'
+    video_path =  'D:\R_20221002_003800_20221002_004054.avi'
     # video_path = 'D:/test1.mp4'
 
     import glob
@@ -431,7 +432,7 @@ if __name__ == "__main__":
     player = VideoPlayer()
     player.openVideoFile(video_path)
     player.getNextFrame()
-    player.setScaleFactor(3)
+    player.setScaleFactor(0.5)
     while (player.playing):
         player.show()
         player.waitKeyHandle()
