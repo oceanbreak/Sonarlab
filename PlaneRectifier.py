@@ -566,6 +566,12 @@ if __name__ == "__main__":
     import os
     import glob
     from SonarImaging import VideoPlayer
+
+    SCALE_FACTOR = 0.5
+    FRAME_STEP = 1
+    ITER_STEP = 1
+    MAX_ITER = 15
+    
     # from scipy.spatial.transform import Rotation as Rot
 
     # images = glob.glob('*.jpg')
@@ -583,12 +589,12 @@ if __name__ == "__main__":
         print(FILE)
         v = VideoPlayer()
         v.openVideoFile(video_file)
-        v.setScaleFactor(4)
+        v.setScaleFactor(SCALE_FACTOR)
 
         v.getNextFrame()
 
         # Set how many frames to skip
-        v.setFrameStep(2)
+        v.setFrameStep(4)
 
         frame_count = 0
         while v.playing:
@@ -596,7 +602,7 @@ if __name__ == "__main__":
             print(f'Frame {v.cur_frame_no} of {v.vid_frame_length}')
             frame1 = v.getCurrentFrame()
             h, w, _ = frame1.shape
-            new_shape = (w//4, h//4)
+            new_shape = (int(w * SCALE_FACTOR), int(h * SCALE_FACTOR))
             # key = v.waitKeyHandle()
             prev_normal = [0.0, 0.0, 1.0]
             # if key == ord('F'):
@@ -605,14 +611,14 @@ if __name__ == "__main__":
                 c_key = 0
                 normals = []
                 motions = []
-                iteration = 2
-                iteration_step = 1
-                rec_step=2
+                iteration = 1
+                iteration_step = 2
+                rec_step = 1
                 max_iter = 10
                 cosine = 0.0
                 motion = 1
                 
-                while iteration < max_iter and motion < 35 :   
+                while iteration < max_iter and motion < 15 :   
 
                     print(f"------ITERATION # {iteration}--------")
                     print(f"Cosine figured =  {cosine}")
@@ -635,11 +641,12 @@ if __name__ == "__main__":
                     # sh_f2 = cv2.resize(frame2, new_shape)
                     # # cv2.imshow('frame2', sh_f2)
 
-                    rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=0.2, filter_step=1,
+                    undist_ret = undistortImage(frame1, mtx, dst, crop=False)
+                    rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=SCALE_FACTOR, filter_step=1,
                     crop=False,
-                    lo_ratio=0.7,
+                    lo_ratio=0.2,
                     ransac_thresh=3,
-                    show_images=False)
+                    show_images=True)
                     
                     if rec_ret is None:
                         pass
@@ -662,7 +669,9 @@ if __name__ == "__main__":
                     normals.append(prev_normal)
                     normal = prev_normal
 
+                cv2.imwrite(f'2/{FILE}_Raw_{v.cur_frame_no}.jpg', frame1)
                 cv2.imwrite(f'2/{FILE}_Rectified_{v.cur_frame_no}.jpg', rectified)
+                cv2.imwrite(f'2/{FILE}_Undistorted_{v.cur_frame_no}.jpg', undist_ret)
                 rec_show = cv2.resize(rectified, new_shape)
                 cv2.imshow('Recified frame', rec_show)
 
