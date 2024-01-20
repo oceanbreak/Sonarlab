@@ -567,10 +567,12 @@ if __name__ == "__main__":
     import glob
     from SonarImaging import VideoPlayer
 
-    SCALE_FACTOR = 0.5
+    SCALE_FACTOR = 0.2
     FRAME_STEP = 1
-    ITER_STEP = 1
-    MAX_ITER = 15
+    ITER_STEP = 2
+    MAX_ITER = 10
+    SHOW_INETMEDIATE = False
+    MOTION_ABS = 50
     
     # from scipy.spatial.transform import Rotation as Rot
 
@@ -594,7 +596,7 @@ if __name__ == "__main__":
         v.getNextFrame()
 
         # Set how many frames to skip
-        v.setFrameStep(4)
+        v.setFrameStep(FRAME_STEP)
 
         frame_count = 0
         while v.playing:
@@ -612,13 +614,13 @@ if __name__ == "__main__":
                 normals = []
                 motions = []
                 iteration = 1
-                iteration_step = 2
+                iteration_step = ITER_STEP
                 rec_step = 1
-                max_iter = 10
+                max_iter = MAX_ITER
                 cosine = 0.0
                 motion = 1
                 
-                while iteration < max_iter and motion < 15 :   
+                while iteration < max_iter and motion < MOTION_ABS * SCALE_FACTOR :   
 
                     print(f"------ITERATION # {iteration}--------")
                     print(f"Cosine figured =  {cosine}")
@@ -644,9 +646,9 @@ if __name__ == "__main__":
                     undist_ret = undistortImage(frame1, mtx, dst, crop=False)
                     rec_ret = RectfyImage(frame1, frame2, mtx, dst, SCALE_FACTOR=SCALE_FACTOR, filter_step=1,
                     crop=False,
-                    lo_ratio=0.2,
+                    lo_ratio=0.7,
                     ransac_thresh=3,
-                    show_images=True)
+                    show_images=SHOW_INETMEDIATE)
                     
                     if rec_ret is None:
                         pass
