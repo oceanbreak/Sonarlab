@@ -306,6 +306,7 @@ class VideoPlayer:
         cur_frame = self.current_frame
         new_size = (int(cur_frame.shape[1] * self.scale_factor), 
                     int(cur_frame.shape[0] * self.scale_factor))
+        self.cur_scaled_size = new_size
         return cv2.resize(cur_frame, new_size)
 
 
